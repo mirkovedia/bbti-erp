@@ -33,7 +33,7 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
     proyecto.logistica?.materiales || []
   );
   const [saving, setSaving] = useState(false);
-  const [nuevo, setNuevo] = useState({ nombre: '', cantidad: 0, unidad: 'und', comprado: 0 });
+  const [nuevo, setNuevo] = useState({ codigo: '', nombre: '', cantidad: 0, unidad: 'und', precio_unitario: 0 });
 
   // Re-sincroniza la lista si cambia el proyecto mostrado
   useEffect(() => {
@@ -46,18 +46,27 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
     [materiales, proyecto.logistica?.materiales]
   );
 
+  const totalGeneral = useMemo(
+    () => materiales.reduce((s, m) => s + m.cantidad * (m.precio_unitario || 0), 0),
+    [materiales]
+  );
+
+  const fmt = (n: number) => n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const addMaterial = () => {
     if (!nuevo.nombre.trim()) return;
     const material: Material = {
       id: `tmp-${crypto.randomUUID()}`,
+      codigo: nuevo.codigo.trim() || undefined,
       nombre: nuevo.nombre.trim(),
       cantidad: nuevo.cantidad,
       unidad: nuevo.unidad || 'und',
-      comprado: nuevo.comprado,
-      estado: calcEstado(nuevo.cantidad, nuevo.comprado),
+      comprado: 0,
+      precio_unitario: nuevo.precio_unitario || 0,
+      estado: calcEstado(nuevo.cantidad, 0),
     };
     setMateriales((prev) => [...prev, material]);
-    setNuevo({ nombre: '', cantidad: 0, unidad: 'und', comprado: 0 });
+    setNuevo({ codigo: '', nombre: '', cantidad: 0, unidad: 'und', precio_unitario: 0 });
   };
 
   const updateComprado = (id: string, comprado: number) => {
@@ -117,21 +126,25 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700">
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-400 uppercase">Material</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Cantidad</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Unidad</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Comprado</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Estado</th>
-                {canEdit && <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Acciones</th>}
+                <th className="text-left py-3 px-3 text-xs font-medium text-slate-400 uppercase">Código</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-slate-400 uppercase">Material</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-slate-400 uppercase">Cant.</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-slate-400 uppercase">Und.</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-slate-400 uppercase">Comprado</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-slate-400 uppercase">P. Unit.</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-slate-400 uppercase">P. Total</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-slate-400 uppercase">Estado</th>
+                {canEdit && <th className="text-center py-3 px-3 text-xs font-medium text-slate-400 uppercase">Acc.</th>}
               </tr>
             </thead>
             <tbody>
               {materiales.map((m) => (
                 <tr key={m.id} className="border-b border-slate-800 hover:bg-slate-800/30">
-                  <td className="py-3 px-4 text-sm text-white">{m.nombre}</td>
-                  <td className="py-3 px-4 text-sm text-center text-slate-300">{m.cantidad}</td>
-                  <td className="py-3 px-4 text-sm text-center text-slate-300">{m.unidad}</td>
-                  <td className="py-3 px-4 text-sm text-center text-slate-300">
+                  <td className="py-3 px-3 text-sm text-blue-400 font-mono">{m.codigo || '—'}</td>
+                  <td className="py-3 px-3 text-sm text-white">{m.nombre}</td>
+                  <td className="py-3 px-3 text-sm text-center text-slate-300">{m.cantidad}</td>
+                  <td className="py-3 px-3 text-sm text-center text-slate-300">{m.unidad}</td>
+                  <td className="py-3 px-3 text-sm text-center text-slate-300">
                     {canEdit ? (
                       <input
                         type="number"
@@ -144,13 +157,15 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
                       m.comprado
                     )}
                   </td>
-                  <td className="py-3 px-4 text-center">
+                  <td className="py-3 px-3 text-sm text-right text-slate-300">S/ {fmt(m.precio_unitario || 0)}</td>
+                  <td className="py-3 px-3 text-sm text-right text-white">S/ {fmt(m.cantidad * (m.precio_unitario || 0))}</td>
+                  <td className="py-3 px-3 text-center">
                     <span className={cn('inline-flex px-2 py-0.5 rounded-full text-xs font-medium border', estadoColors[m.estado])}>
                       {m.estado}
                     </span>
                   </td>
                   {canEdit && (
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => removeMaterial(m.id)}
                         className="p-1 text-slate-400 hover:text-red-400 transition-colors"
@@ -162,6 +177,13 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-700 bg-slate-800/40">
+                <td colSpan={6} className="py-3 px-3 text-sm text-right font-medium text-slate-400 uppercase">Total metrado</td>
+                <td className="py-3 px-3 text-sm text-right font-bold text-green-400">S/ {fmt(totalGeneral)}</td>
+                <td colSpan={canEdit ? 2 : 1} />
+              </tr>
+            </tfoot>
           </table>
         </div>
       ) : (
@@ -172,36 +194,54 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
       )}
 
       {canEdit && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 pt-4 border-t border-slate-800">
-          <input
-            type="text"
-            value={nuevo.nombre}
-            onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
-            placeholder="Nombre del material"
-            className="md:col-span-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="number"
-            min={0}
-            value={nuevo.cantidad || ''}
-            onChange={(e) => setNuevo({ ...nuevo, cantidad: Number(e.target.value) })}
-            placeholder="Cantidad"
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            value={nuevo.unidad}
-            onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })}
-            placeholder="Unidad"
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="pt-4 border-t border-slate-800 space-y-2">
+          <p className="text-xs font-medium text-slate-400 uppercase">Agregar material manual</p>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+            <input
+              type="text"
+              value={nuevo.codigo}
+              onChange={(e) => setNuevo({ ...nuevo, codigo: e.target.value })}
+              placeholder="Código"
+              className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              value={nuevo.nombre}
+              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
+              placeholder="Nombre del material"
+              className="md:col-span-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="number"
+              min={0}
+              value={nuevo.cantidad || ''}
+              onChange={(e) => setNuevo({ ...nuevo, cantidad: Number(e.target.value) })}
+              placeholder="Cantidad"
+              className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              value={nuevo.unidad}
+              onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })}
+              placeholder="Unidad"
+              className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="number"
+              min={0}
+              value={nuevo.precio_unitario || ''}
+              onChange={(e) => setNuevo({ ...nuevo, precio_unitario: Number(e.target.value) })}
+              placeholder="Precio unit."
+              className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
           <button
             onClick={addMaterial}
             disabled={!nuevo.nombre.trim()}
-            className="flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            Agregar
+            Agregar material
           </button>
         </div>
       )}
