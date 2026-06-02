@@ -60,7 +60,7 @@ export default function DocumentosPage() {
   const handleDownload = async (doc: Documento) => {
     if (!doc.storage_path) return;
     try {
-      const res = await fetch('/api/documentos', {
+      const res = await fetch('/api/documentos/download-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storage_path: doc.storage_path }),
