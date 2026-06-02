@@ -67,6 +67,16 @@ export interface Comentario {
   fecha: string;
 }
 
+export interface Documento {
+  id: string;
+  proyecto_id: string;
+  nombre: string;
+  tipo: string | null;
+  storage_path: string | null;
+  subido_por: string | null;
+  created_at: string;
+}
+
 export interface Proyecto {
   id: string;
   cliente: string;
@@ -106,4 +116,5 @@ export interface Proyecto {
     alerta: string;
     pagos: Array<{ id: string; descripcion: string; monto: number; fecha: string }>;
   };
+  documentos?: Documento[];
 }
