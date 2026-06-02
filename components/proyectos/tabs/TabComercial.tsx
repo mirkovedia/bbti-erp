@@ -210,14 +210,14 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
             <FileText className="w-4 h-4 inline mr-1" />
             Metrado
           </label>
-          <div className="flex gap-2">
+          <div className="space-y-2">
             <input
               type="text"
               value={metrado}
               onChange={(e) => setMetrado(e.target.value)}
               disabled={!canEdit}
               placeholder="Descripción o archivo del metrado..."
-              className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {canImport && (
               <>
@@ -232,7 +232,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                   type="button"
                   onClick={() => metradoInputRef.current?.click()}
                   title="Importar materiales desde un Excel de metrado"
-                  className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors whitespace-nowrap"
+                  className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   Importar metrado
