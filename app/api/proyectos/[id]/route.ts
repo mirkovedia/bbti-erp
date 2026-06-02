@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { PERMS } from '@/lib/auth/permissions';
+import { computeEstadoProyecto } from '@/lib/utils/estado-proyecto';
 import type { Permissions, Rol } from '@/types';
 
 export async function GET(
@@ -207,7 +208,23 @@ export async function PATCH(
       });
     }
 
-    return NextResponse.json({ success: true });
+    // Estado automático: recalcular desde el avance real de las áreas y persistir.
+    const [ing, mats, etps, prod] = await Promise.all([
+      supabase.from('proyecto_ingenieria').select('estado_planos').eq('proyecto_id', id).maybeSingle(),
+      supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
+      supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
+      supabase.from('proyecto_produccion').select('pruebas, envio').eq('proyecto_id', id).maybeSingle(),
+    ]);
+    const nuevoEstado = computeEstadoProyecto({
+      estadoPlanos: ing.data?.estado_planos,
+      materiales: mats.data ?? [],
+      etapas: etps.data ?? [],
+      pruebas: prod.data?.pruebas,
+      envio: prod.data?.envio,
+    });
+    await supabase.from('proyectos').update({ estado: nuevoEstado, updated_at: now }).eq('id', id);
+
+    return NextResponse.json({ success: true, estado: nuevoEstado });
   } catch (err) {
     console.error('PATCH /api/proyectos/[id] error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

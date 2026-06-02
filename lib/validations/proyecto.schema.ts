@@ -7,14 +7,7 @@ export const createProyectoSchema = z.object({
   dias_plazo: z.number().min(1).optional(),
   adelanto: z.number().min(0).optional(),
   metrado: z.string().optional(),
-  estado: z.enum([
-    'EN PRODUCCIÓN',
-    'LISTO PARA PRUEBAS',
-    'EN INGENIERÍA',
-    'COMPRAS EN CURSO',
-    'RETRASADO',
-    'COMPLETADO',
-  ]),
+  // El estado es automático (se deriva del avance); no se elige al crear.
 });
 
 export type CreateProyectoInput = z.infer<typeof createProyectoSchema>;

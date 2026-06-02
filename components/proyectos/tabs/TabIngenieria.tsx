@@ -49,12 +49,8 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ingenieria: { estado_planos: estadoPlanos } }),
       });
-      if (res.ok) {
-        onUpdate({
-          ...proyecto,
-          ingenieria: { ...proyecto.ingenieria!, estado_planos: estadoPlanos },
-        });
-      }
+      // refetch para reflejar el estado automático recalculado (planos → COMPRAS EN CURSO)
+      if (res.ok) await refetch();
     } finally {
       setSaving(false);
     }

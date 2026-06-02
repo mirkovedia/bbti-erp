@@ -77,7 +77,8 @@ export async function POST(request: Request) {
       monto: body.monto || 0,
       usuario_id: user.id,
       usuario_nombre: userData?.nombre || 'Sistema',
-      estado: body.estado || 'EN INGENIERÍA',
+      // El estado es automático (se deriva del avance). Un proyecto nuevo arranca en Ingeniería.
+      estado: 'EN INGENIERÍA',
     };
 
     const { data, error } = await supabase

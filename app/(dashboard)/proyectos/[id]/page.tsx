@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { EstadoStepper } from '@/components/proyectos/EstadoStepper';
 import { cn } from '@/lib/utils';
 
 // Skeleton mientras se carga el chunk de una pestaña
@@ -123,6 +124,9 @@ export default function ProyectoDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Stepper del flujo (estado automático) */}
+      <EstadoStepper proyecto={proyecto} />
 
       {/* Tabs */}
       <div className="border-b border-slate-800">

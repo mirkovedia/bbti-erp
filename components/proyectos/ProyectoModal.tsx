@@ -22,7 +22,6 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
   } = useForm<CreateProyectoInput>({
     resolver: zodResolver(createProyectoSchema),
     defaultValues: {
-      estado: 'EN INGENIERÍA',
       monto: 0,
     },
   });
@@ -88,33 +87,22 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Monto (S/)</label>
-              <input
-                type="number"
-                step="0.01"
-                {...register('monto', { valueAsNumber: true })}
-                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0.00"
-              />
-              {errors.monto && (
-                <p className="mt-1 text-xs text-red-400">{errors.monto.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Estado</label>
-              <select
-                {...register('estado')}
-                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="EN INGENIERÍA">En Ingenieria</option>
-                <option value="COMPRAS EN CURSO">Compras en Curso</option>
-                <option value="EN PRODUCCIÓN">En Produccion</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Monto (S/)</label>
+            <input
+              type="number"
+              step="0.01"
+              {...register('monto', { valueAsNumber: true })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="0.00"
+            />
+            {errors.monto && (
+              <p className="mt-1 text-xs text-red-400">{errors.monto.message}</p>
+            )}
           </div>
+          <p className="text-xs text-slate-500">
+            El estado del proyecto avanza automáticamente según el progreso de cada área.
+          </p>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
