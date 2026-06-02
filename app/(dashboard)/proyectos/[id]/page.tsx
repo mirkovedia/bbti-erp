@@ -2,15 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Proyecto } from '@/types';
-import { TabComercial } from '@/components/proyectos/tabs/TabComercial';
-import { TabIngenieria } from '@/components/proyectos/tabs/TabIngenieria';
-import { TabLogistica } from '@/components/proyectos/tabs/TabLogistica';
-import { TabProduccion } from '@/components/proyectos/tabs/TabProduccion';
-import { TabFinanzas } from '@/components/proyectos/tabs/TabFinanzas';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { cn } from '@/lib/utils';
+
+// Skeleton mientras se carga el chunk de una pestaña
+const TabLoading = () => (
+  <div className="h-64 bg-slate-800/30 rounded-lg animate-pulse" />
+);
+
+// Lazy-load por pestaña: solo se compila/descarga el chunk de la pestaña activa.
+// Reduce el tiempo de compilación on-demand en dev y aligera el bundle inicial.
+const TabComercial = dynamic(
+  () => import('@/components/proyectos/tabs/TabComercial').then((m) => m.TabComercial),
+  { loading: TabLoading }
+);
+const TabIngenieria = dynamic(
+  () => import('@/components/proyectos/tabs/TabIngenieria').then((m) => m.TabIngenieria),
+  { loading: TabLoading }
+);
+const TabLogistica = dynamic(
+  () => import('@/components/proyectos/tabs/TabLogistica').then((m) => m.TabLogistica),
+  { loading: TabLoading }
+);
+const TabProduccion = dynamic(
+  () => import('@/components/proyectos/tabs/TabProduccion').then((m) => m.TabProduccion),
+  { loading: TabLoading }
+);
+const TabFinanzas = dynamic(
+  () => import('@/components/proyectos/tabs/TabFinanzas').then((m) => m.TabFinanzas),
+  { loading: TabLoading }
+);
 
 const tabs = [
   { id: 'comercial', label: 'Comercial' },
