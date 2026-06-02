@@ -22,7 +22,7 @@ export async function GET(
     }
 
     // Fetch all related data in parallel
-    const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones] = await Promise.all([
+    const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos] = await Promise.all([
       supabase.from('proyecto_comercial').select('*').eq('proyecto_id', id).maybeSingle(),
       supabase.from('proyecto_ingenieria').select('*').eq('proyecto_id', id).maybeSingle(),
       supabase.from('proyecto_materiales').select('*').eq('proyecto_id', id).order('id'),
@@ -32,6 +32,7 @@ export async function GET(
       supabase.from('proyecto_pagos').select('*').eq('proyecto_id', id).order('fecha'),
       supabase.from('proyecto_comentarios').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
       supabase.from('proyecto_observaciones').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
+      supabase.from('proyecto_documentos').select('*').eq('proyecto_id', id).order('created_at', { ascending: false }),
     ]);
 
     const fullProyecto = {
@@ -55,6 +56,7 @@ export async function GET(
         ...finanzas.data,
         pagos: pagos.data || [],
       } : null,
+      documentos: documentos.data || [],
     };
 
     return NextResponse.json(fullProyecto);
