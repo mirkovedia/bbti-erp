@@ -97,7 +97,6 @@ export interface Proyecto {
   ingenieria?: {
     estado_planos: string;
     observaciones: Comentario[];
-    documentos: string[];
   };
   logistica?: {
     materiales: Material[];

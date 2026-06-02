@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       .createSignedUploadUrl(path);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ path: data.path, token: data.token, signedUrl: data.signedUrl });
+    return NextResponse.json({ path: data.path, token: data.token });
   } catch (err) {
     console.error('POST /api/documentos/upload-url error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

@@ -25,7 +25,8 @@ export async function DELETE(
 
     const admin = createAdminClient();
     if (doc.storage_path) {
-      await admin.storage.from(DOCUMENTOS_BUCKET).remove([doc.storage_path]);
+      const { error: storageErr } = await admin.storage.from(DOCUMENTOS_BUCKET).remove([doc.storage_path]);
+      if (storageErr) console.error('Storage remove falló:', storageErr.message);
     }
     const { error } = await admin.from('proyecto_documentos').delete().eq('id', id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

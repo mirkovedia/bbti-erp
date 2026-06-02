@@ -43,8 +43,16 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { proyecto_id, nombre, tipo, storage_path } = await request.json();
-    if (!proyecto_id || !nombre || !storage_path) {
+    if (typeof proyecto_id !== 'string' || typeof nombre !== 'string' || typeof storage_path !== 'string'
+        || !proyecto_id || !nombre || !storage_path) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+    if (nombre.length > 255) {
+      return NextResponse.json({ error: 'Nombre demasiado largo' }, { status: 400 });
+    }
+    // El path debe pertenecer al proyecto (evita asociar archivos de otros proyectos)
+    if (!storage_path.startsWith(`${proyecto_id}/`)) {
+      return NextResponse.json({ error: 'storage_path inválido para este proyecto' }, { status: 400 });
     }
 
     const { data: userData } = await supabase

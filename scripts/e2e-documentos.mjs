@@ -11,6 +11,8 @@ const browser = await chromium.launch();
 const page = await browser.newContext().then((c) => c.newPage());
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message));
+// Aceptar el confirm() de eliminación
+page.on('dialog', (d) => d.accept());
 
 try {
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });

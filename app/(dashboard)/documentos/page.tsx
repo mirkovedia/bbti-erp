@@ -3,16 +3,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Download, Search, File, FileSpreadsheet } from 'lucide-react';
+import type { Documento } from '@/types';
 
-interface Documento {
-  id: string;
-  proyecto_id: string;
+// La lista global añade el nombre del cliente (join con proyectos)
+interface DocumentoConCliente extends Documento {
   cliente: string;
-  nombre: string;
-  tipo: string | null;
-  storage_path: string | null;
-  subido_por: string | null;
-  created_at: string;
 }
 
 const tipoIcon = (tipo: string | null) => {
@@ -23,7 +18,7 @@ const tipoIcon = (tipo: string | null) => {
 
 export default function DocumentosPage() {
   const router = useRouter();
-  const [docs, setDocs] = useState<Documento[]>([]);
+  const [docs, setDocs] = useState<DocumentoConCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [proyectoFilter, setProyectoFilter] = useState('');
@@ -57,7 +52,7 @@ export default function DocumentosPage() {
     return matchesSearch && matchesProyecto;
   });
 
-  const handleDownload = async (doc: Documento) => {
+  const handleDownload = async (doc: DocumentoConCliente) => {
     if (!doc.storage_path) return;
     try {
       const res = await fetch('/api/documentos/download-url', {

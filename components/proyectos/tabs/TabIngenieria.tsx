@@ -143,6 +143,7 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   };
 
   const handleDeleteDoc = async (id: string) => {
+    if (!window.confirm('¿Eliminar este documento? Esta acción no se puede deshacer.')) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/documentos/${id}`, { method: 'DELETE' });
