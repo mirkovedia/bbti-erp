@@ -51,6 +51,8 @@ export interface Material {
   unidad: string;
   comprado: number;
   estado: EstadoMaterial;
+  codigo?: string;
+  precio_unitario?: number;
 }
 
 export interface Etapa {

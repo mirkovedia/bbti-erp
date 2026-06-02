@@ -161,6 +161,8 @@ export async function PATCH(
             unidad: m.unidad ?? 'und',
             comprado: m.comprado ?? 0,
             estado: m.estado ?? 'PENDIENTE',
+            codigo: m.codigo ?? null,
+            precio_unitario: m.precio_unitario ?? 0,
           }))
         );
       }
