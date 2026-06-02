@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const roles = [
+export const roles = [
   'Administrador',
   'Gerencia General',
   'Comercial',

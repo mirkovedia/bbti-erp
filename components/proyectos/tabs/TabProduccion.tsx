@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { Proyecto, EstadoEtapa } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -39,6 +39,12 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
   const [envio, setEnvio] = useState(produccion?.envio || false);
   const [saving, setSaving] = useState(false);
   const [updatingEtapa, setUpdatingEtapa] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPruebas(produccion?.pruebas || false);
+    setEnvio(produccion?.envio || false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id]);
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
@@ -89,13 +95,13 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
         <h3 className="text-lg font-semibold text-white mb-4">Etapas de Producción</h3>
         <div className="space-y-2">
           {etapas.map((etapa) => {
-            const Icon = etapaIcons[etapa.estado];
+            const Icon = etapaIcons[etapa.estado] ?? Circle;
             return (
               <div
                 key={etapa.id}
                 className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700"
               >
-                <Icon className={cn('w-5 h-5', etapaColors[etapa.estado])} />
+                <Icon className={cn('w-5 h-5', etapaColors[etapa.estado] ?? 'text-slate-500')} />
                 <span className="flex-1 text-sm text-white">{etapa.nombre}</span>
                 {canEdit && (
                   <select

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const rolColors: Record<string, string> = {
   Administrador: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
-  'Gerencia General': 'bg-gold-500/20 text-amber-300 border-amber-500/30',
+  'Gerencia General': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
   Comercial: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
   Ingeniería: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
   Logística: 'bg-green-500/20 text-green-300 border-green-500/30',

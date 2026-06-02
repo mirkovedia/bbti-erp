@@ -49,9 +49,10 @@ export default function DocumentosPage() {
   );
 
   const filtered = docs.filter((d) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      d.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      d.cliente.toLowerCase().includes(search.toLowerCase());
+      (d.nombre ?? '').toLowerCase().includes(q) ||
+      (d.cliente ?? '').toLowerCase().includes(q);
     const matchesProyecto = !proyectoFilter || d.proyecto_id === proyectoFilter;
     return matchesSearch && matchesProyecto;
   });
@@ -131,7 +132,7 @@ export default function DocumentosPage() {
                   </div>
                 </div>
                 <span className="text-xs text-slate-500 shrink-0">
-                  {new Date(doc.created_at).toLocaleDateString('es-PE')}
+                  {doc.created_at ? new Date(doc.created_at).toLocaleDateString('es-PE') : '—'}
                 </span>
                 <button
                   onClick={() => handleDownload(doc)}

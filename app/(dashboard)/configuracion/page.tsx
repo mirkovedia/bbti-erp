@@ -48,7 +48,11 @@ export default function ConfiguracionPage() {
         const res = await fetch('/api/configuracion');
         const data = await res.json();
         if (data && Object.keys(data).length > 0) {
-          setConfig({ ...EMPTY, ...data });
+          // Normalizar null/undefined a '' para no romper los inputs controlados
+          const clean = Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, v ?? ''])
+          );
+          setConfig({ ...EMPTY, ...clean });
         }
       } catch (err) {
         console.error('Error fetching config:', err);
@@ -163,7 +167,7 @@ export default function ConfiguracionPage() {
             <div key={c.key}>
               <label className="block text-sm text-slate-400 mb-1">{c.label}</label>
               <input
-                value={config[c.key]}
+                value={config[c.key] ?? ''}
                 onChange={(e) => handleChange(c.key, e.target.value)}
                 placeholder={c.placeholder}
                 className={inputCls}
@@ -172,7 +176,7 @@ export default function ConfiguracionPage() {
           ))}
           <div>
             <label className="block text-sm text-slate-400 mb-1">Moneda</label>
-            <select value={config.moneda} onChange={(e) => handleChange('moneda', e.target.value)} className={inputCls}>
+            <select value={config.moneda || 'S/'} onChange={(e) => handleChange('moneda', e.target.value)} className={inputCls}>
               <option value="S/">Soles (S/)</option>
               <option value="USD">Dólares (USD)</option>
             </select>
@@ -181,7 +185,7 @@ export default function ConfiguracionPage() {
             <label className="block text-sm text-slate-400 mb-1">IGV (%)</label>
             <input
               type="number"
-              value={config.igv}
+              value={config.igv ?? ''}
               onChange={(e) => handleChange('igv', e.target.value)}
               className={inputCls}
             />

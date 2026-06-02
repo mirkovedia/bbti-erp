@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, FileCheck, AlertCircle } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -29,6 +29,11 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   const [nuevaObs, setNuevaObs] = useState('');
   const [enviando, setEnviando] = useState(false);
 
+  useEffect(() => {
+    setEstadoPlanos(ingenieria?.estado_planos || 'Solicitud de planos');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id]);
+
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
     if (res.ok) onUpdate(await res.json());
@@ -37,15 +42,17 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch(`/api/proyectos/${proyecto.id}`, {
+      const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ingenieria: { estado_planos: estadoPlanos } }),
       });
-      onUpdate({
-        ...proyecto,
-        ingenieria: { ...proyecto.ingenieria!, estado_planos: estadoPlanos },
-      });
+      if (res.ok) {
+        onUpdate({
+          ...proyecto,
+          ingenieria: { ...proyecto.ingenieria!, estado_planos: estadoPlanos },
+        });
+      }
     } finally {
       setSaving(false);
     }

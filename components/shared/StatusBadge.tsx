@@ -15,8 +15,10 @@ interface Props {
   className?: string;
 }
 
+const FALLBACK = { bg: 'bg-slate-500/20', text: 'text-slate-300', border: 'border-slate-500/30' };
+
 export const StatusBadge = ({ estado, className }: Props) => {
-  const config = statusConfig[estado];
+  const config = statusConfig[estado] ?? FALLBACK;
   return (
     <span
       className={cn(

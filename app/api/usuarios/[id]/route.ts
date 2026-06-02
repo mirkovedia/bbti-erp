@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { roles } from '@/lib/validations/usuario.schema';
 import { NextResponse } from 'next/server';
 
 export async function PATCH(
@@ -28,7 +29,12 @@ export async function PATCH(
     if (typeof body.activo === 'boolean') updates.activo = body.activo;
     if (typeof body.nombre === 'string') updates.nombre = body.nombre;
     if (typeof body.area === 'string') updates.area = body.area;
-    if (typeof body.rol === 'string') updates.rol = body.rol;
+    if (typeof body.rol === 'string') {
+      if (!roles.includes(body.rol)) {
+        return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
+      }
+      updates.rol = body.rol;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });

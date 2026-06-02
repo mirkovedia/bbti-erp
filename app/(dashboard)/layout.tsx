@@ -42,6 +42,16 @@ export default function DashboardLayout({
     }
   }, [user, setUser, router]);
 
+  // Mientras se carga la sesión, mostrar un loader a pantalla completa
+  // para que las páginas hijas no evalúen permisos con user === null
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[var(--navy)] flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--navy)]">
       <Sidebar />

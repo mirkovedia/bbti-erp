@@ -234,7 +234,7 @@ const UsuarioModal = ({ roles, onClose, onCreated }: ModalProps) => {
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Contraseña inicial</label>
-            <input {...register('password')} type="text" className={inputCls} placeholder="••••••" />
+            <input {...register('password')} type="password" className={inputCls} placeholder="••••••" />
             {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
           </div>
 

@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
+import { PERMS } from '@/lib/auth/permissions';
+import type { Rol } from '@/types';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -56,12 +58,17 @@ export async function POST(request: Request) {
     const nextNum = String(maxCorrelativo + 1).padStart(2, '0');
     const id = `PR-${nextNum}-${year}`;
 
-    // Get user data for denormalized name
+    // Get user data for denormalized name + verificación de permiso
     const { data: userData } = await supabase
       .from('users')
-      .select('nombre')
+      .select('nombre, rol')
       .eq('id', user.id)
       .single();
+
+    const rol = userData?.rol as Rol | undefined;
+    if (!rol || !PERMS[rol]?.canCreate) {
+      return NextResponse.json({ error: 'No tienes permiso para crear proyectos' }, { status: 403 });
+    }
 
     const proyecto = {
       id,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -27,6 +27,15 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   const [pagoMonto, setPagoMonto] = useState(0);
   const [pagoFecha, setPagoFecha] = useState('');
   const [agregandoPago, setAgregandoPago] = useState(false);
+
+  useEffect(() => {
+    setAdelanto(finanzas?.adelanto || 0);
+    setFechaAdelanto(finanzas?.fecha_adelanto || '');
+    setPorcentaje(finanzas?.porcentaje || 0);
+    setFormaPago(finanzas?.forma_pago || '');
+    setAlerta(finanzas?.alerta || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id]);
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);

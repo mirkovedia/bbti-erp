@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, DollarSign, FileText, MessageSquare, Save } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -24,6 +24,16 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   const [saving, setSaving] = useState(false);
   const [nuevoComentario, setNuevoComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  // Re-sincroniza los campos si cambia el proyecto mostrado
+  useEffect(() => {
+    setFechaEntrega(comercial?.fecha_entrega || '');
+    setDiasPlazo(comercial?.dias_plazo || 0);
+    setAdelanto(comercial?.adelanto || 0);
+    setMetrado(comercial?.metrado || '');
+    setAlerta(comercial?.alerta || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id]);
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);

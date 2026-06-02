@@ -22,7 +22,7 @@ export const RoleBadge = ({ rol, className }: Props) => {
     <span
       className={cn(
         'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
-        roleConfig[rol],
+        roleConfig[rol] ?? 'bg-slate-500/20 text-slate-300 border-slate-500/30',
         className
       )}
     >

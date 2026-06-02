@@ -126,7 +126,7 @@ export default function CalendarioPage() {
                       title={`${p.id} · ${p.cliente} · ${p.estado}`}
                       className={cn(
                         'text-[10px] leading-tight text-white rounded px-1 py-0.5 truncate text-left hover:opacity-80 transition-opacity',
-                        ESTADO_COLORS[p.estado]
+                        ESTADO_COLORS[p.estado] ?? 'bg-slate-500'
                       )}
                     >
                       {p.cliente}

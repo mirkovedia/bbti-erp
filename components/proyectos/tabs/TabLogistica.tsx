@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Package, Trash2, Save } from 'lucide-react';
 import { Proyecto, Material, EstadoMaterial } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -35,12 +35,21 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
   const [saving, setSaving] = useState(false);
   const [nuevo, setNuevo] = useState({ nombre: '', cantidad: 0, unidad: 'und', comprado: 0 });
 
-  const dirty = JSON.stringify(materiales) !== JSON.stringify(proyecto.logistica?.materiales || []);
+  // Re-sincroniza la lista si cambia el proyecto mostrado
+  useEffect(() => {
+    setMateriales(proyecto.logistica?.materiales || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id]);
+
+  const dirty = useMemo(
+    () => JSON.stringify(materiales) !== JSON.stringify(proyecto.logistica?.materiales || []),
+    [materiales, proyecto.logistica?.materiales]
+  );
 
   const addMaterial = () => {
     if (!nuevo.nombre.trim()) return;
     const material: Material = {
-      id: `tmp-${Date.now()}`,
+      id: `tmp-${crypto.randomUUID()}`,
       nombre: nuevo.nombre.trim(),
       cantidad: nuevo.cantidad,
       unidad: nuevo.unidad || 'und',

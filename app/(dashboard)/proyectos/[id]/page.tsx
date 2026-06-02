@@ -26,29 +26,51 @@ export default function ProyectoDetailPage() {
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
   const [activeTab, setActiveTab] = useState('comercial');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!params.id) return;
     const fetchProyecto = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/proyectos/${params.id}`);
-        if (!res.ok) throw new Error('Not found');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Error ${res.status} al cargar el proyecto`);
+        }
         const data = await res.json();
         setProyecto(data);
-      } catch {
-        router.push('/proyectos');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error desconocido');
       } finally {
         setLoading(false);
       }
     };
 
     fetchProyecto();
-  }, [params.id, router]);
+  }, [params.id]);
 
   if (loading) {
     return (
       <div className="space-y-4">
         <div className="h-8 w-64 bg-slate-800 rounded animate-pulse" />
         <div className="h-64 bg-slate-800/50 rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-red-400 font-medium mb-2">No se pudo cargar el proyecto</p>
+        <p className="text-slate-500 text-sm mb-6">{error}</p>
+        <button
+          onClick={() => router.push('/proyectos')}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+        >
+          Volver a proyectos
+        </button>
       </div>
     );
   }
