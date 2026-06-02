@@ -1,4 +1,4 @@
-// scripts/e2e-metrado.mjs — E2E del flujo importar metrado -> Logística
+// scripts/e2e-metrado.mjs — E2E del flujo importar metrado -> Logística (con selector de hoja)
 import { chromium } from 'playwright';
 
 const BASE = 'http://localhost:3000';
@@ -17,41 +17,36 @@ try {
 
   await page.goto(`${BASE}/proyectos/PR-01-2026`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
-  // Tab Comercial es la activa por defecto
   await page.click('button:has-text("Comercial")');
   await page.waitForTimeout(600);
 
-  // Verificar que el botón existe
-  const btn = await page.locator('button:has-text("Importar metrado")').count();
-  log('Botón "Importar metrado" presente:', btn ? 'SÍ' : 'NO');
-
-  // Subir el Excel directamente al input oculto
+  // Subir el Excel
   await page.locator('input[accept=".xlsx,.xls"]').setInputFiles('metrado.xlsx');
   await page.waitForTimeout(2500);
 
-  // El modal debe mostrar 112 materiales
-  const modalText = await page.locator('text=/materiales/').first().textContent().catch(() => '');
-  log('Modal:', (modalText || '').trim());
-  const muestra112 = await page.locator('text=112 materiales').count();
-  log('Modal muestra "112 materiales":', muestra112 ? 'SÍ ✅' : 'NO ❌');
+  // El selector de hoja debe existir y por defecto sugerir "Precios Equipos" (73)
+  const selectVal = await page.locator('select').filter({ hasText: 'materiales' }).first().inputValue().catch(() => '');
+  log('Hoja seleccionada por defecto:', selectVal || '(no detectada)');
+  const opciones = await page.locator('select option').allTextContents().catch(() => []);
+  log('Opciones de hoja:', opciones.filter((o) => o.includes('materiales')).slice(0, 4).join(' | '));
+
+  const muestra73 = await page.locator('text=73 materiales').count();
+  log('Modal muestra "73 materiales" (Precios Equipos):', muestra73 ? 'SÍ ✅' : 'NO ❌');
+  const tieneInterruptor = await page.locator('text=/ITM 2x16A/').count();
+  log('Preview muestra interruptor "ITM 2x16A" (no tablero):', tieneInterruptor ? 'SÍ ✅' : 'NO ❌');
 
   // Confirmar importación
   await page.click('button:has-text("Importar a Logística")');
   await page.waitForTimeout(4000);
 
-  // Ir a Logística
+  // Logística
   await page.click('button:has-text("Logística")');
   await page.waitForTimeout(1500);
   const titulo = await page.locator('text=/Materiales \\(/').first().textContent().catch(() => '');
   log('Logística:', (titulo || '').trim());
-  const tiene112 = (titulo || '').includes('(112)');
-  log('Logística tiene 112 materiales:', tiene112 ? 'SÍ ✅' : 'NO ❌');
-
-  // Verificar que aparece un código (1.01) y un precio (S/)
-  const tieneCodigo = await page.locator('td:has-text("1.01")').count();
-  const tienePrecio = await page.locator('text=/S\\/ 8,840/').count();
-  log('Muestra código 1.01:', tieneCodigo ? 'SÍ ✅' : 'NO ❌');
-  log('Muestra precio del primer material:', tienePrecio ? 'SÍ ✅' : 'NO ❌');
+  log('Logística tiene 73 materiales:', (titulo || '').includes('(73)') ? 'SÍ ✅' : 'NO ❌');
+  const tieneItm = await page.locator('td:has-text("ITM 2x16A")').count();
+  log('Logística muestra interruptor ITM 2x16A:', tieneItm ? 'SÍ ✅' : 'NO ❌');
 
   log('\nPAGE ERRORS:', pageErrors.length);
   pageErrors.slice(0, 5).forEach((e) => log('  ', e.slice(0, 120)));

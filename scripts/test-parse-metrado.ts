@@ -1,7 +1,7 @@
 // Test del parser de metrado contra el Excel real.
 // Ejecutar: npx tsx scripts/test-parse-metrado.ts
 import * as XLSX from 'xlsx';
-import { parseMetrado } from '../lib/utils/parse-metrado';
+import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet } from '../lib/utils/parse-metrado';
 
 let pass = 0;
 let fail = 0;
@@ -11,23 +11,30 @@ const ok = (cond: boolean, msg: string) => {
 };
 
 const wb = XLSX.readFile('metrado.xlsx');
-const { materiales, warnings } = parseMetrado(wb);
 
-console.log(`Detectados: ${materiales.length} materiales, ${warnings.length} warnings`);
-if (warnings.length) warnings.forEach((w) => console.log('  warn:', w));
+// --- Listado de hojas con materiales ---
+const sheets = listSheetsWithMateriales(wb);
+console.log('Hojas con materiales:', sheets.map((s) => `${s.name}(${s.count})`).join(', '));
+ok(sheets.some((s) => s.name === 'COT'), 'lista incluye COT');
+ok(sheets.some((s) => s.name === 'Precios Equipos'), 'lista incluye Precios Equipos');
+ok(suggestSheet(sheets) === 'Precios Equipos', `sugiere Precios Equipos (obtenido ${suggestSheet(sheets)})`);
 
-ok(materiales.length === 112, `112 materiales (obtenido ${materiales.length})`);
+// --- Hoja Precios Equipos (la correcta para Logística) ---
+const eq = parseMetradoSheet(wb, 'Precios Equipos');
+console.log(`\nPrecios Equipos: ${eq.materiales.length} materiales`);
+const prim = eq.materiales[0];
+console.log('Primer equipo:', JSON.stringify(prim));
+ok(eq.materiales.length > 60 && eq.materiales.length < 90, `Precios Equipos da ~73 materiales (obtenido ${eq.materiales.length})`);
+ok(/ITM 2x16A/i.test(prim?.nombre ?? ''), 'primer equipo es "ITM 2x16A..." (interruptor, no tablero)');
+ok(prim?.cantidad === 20, `primera cantidad = 20 (obtenido ${prim?.cantidad})`);
+ok(prim?.precio_unitario === 117, `primer precio = 117 (obtenido ${prim?.precio_unitario})`);
+ok(eq.materiales.every((m) => m.cantidad > 0), 'todas las cantidades > 0');
+ok(!eq.materiales.some((m) => /SUB ?TOTAL|TOTAL EQUIPOS/i.test(m.nombre)), 'no incluye filas de total');
+ok(!eq.materiales.some((m) => /^TABLERO /i.test(m.nombre)), 'NO incluye tableros (esos están en COT)');
 
-const primero = materiales[0];
-console.log('Primer material:', JSON.stringify(primero));
-ok(primero?.codigo === '1.01', `primer código = 1.01 (obtenido ${primero?.codigo})`);
-ok(/CAJA CON SOPORTE 01/i.test(primero?.nombre ?? ''), 'primer nombre contiene "CAJA CON SOPORTE 01"');
-ok(primero?.cantidad === 8, `primera cantidad = 8 (obtenido ${primero?.cantidad})`);
-ok(Math.abs((primero?.precio_unitario ?? 0) - 8840.09) < 0.5, `primer precio ≈ 8840.09 (obtenido ${primero?.precio_unitario})`);
-
-ok(materiales.every((m) => m.cantidad > 0), 'todas las cantidades > 0 (ninguna fila de categoría)');
-ok(materiales.every((m) => m.nombre.trim().length > 0), 'todos tienen nombre');
-ok(materiales.every((m) => m.unidad === 'und' && m.estado === 'PENDIENTE' && m.comprado === 0), 'defaults correctos (und/PENDIENTE/0)');
+// --- Hoja COT sigue funcionando (retrocompat) ---
+const cot = parseMetradoSheet(wb, 'COT');
+ok(cot.materiales.length === 112, `COT sigue dando 112 (obtenido ${cot.materiales.length})`);
 
 console.log(`\n===== ${pass} OK / ${fail} fallos =====`);
 process.exit(fail ? 1 : 0);

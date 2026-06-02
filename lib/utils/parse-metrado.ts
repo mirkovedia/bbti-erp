@@ -11,9 +11,14 @@ export interface MaterialParsed {
   estado: 'PENDIENTE';
 }
 
-export interface ParseMetradoResult {
+export interface ParseResult {
   materiales: MaterialParsed[];
   warnings: string[];
+}
+
+export interface SheetOption {
+  name: string;
+  count: number;
 }
 
 // Normaliza texto para comparar encabezados: sin acentos, mayúsculas, sin espacios extra.
@@ -33,86 +38,109 @@ const toNumber = (v: unknown): number => {
 
 // Formatea el código ITEM: "1.0199999" -> "1.02", entero -> "3"
 const formatCodigo = (v: unknown): string => {
-  if (typeof v === 'number') {
-    return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  }
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2);
   return String(v ?? '').trim();
 };
 
+const isTotalRow = (row: unknown[]): boolean =>
+  row.some((c) => {
+    const n = norm(c);
+    return (
+      n === 'TOTAL' ||
+      n.includes('SUB TOTAL') ||
+      n.includes('SUBTOTAL') ||
+      n.includes('PRECIO TOTAL') ||
+      n.includes('TOTAL EQUIPOS')
+    );
+  });
+
 /**
- * Parsea un workbook de metrado (cotización BBTI) y devuelve los materiales de la
- * tabla principal de la hoja "COT" (o la primera hoja con encabezado válido).
+ * Parsea la PRIMERA tabla de materiales de una hoja del metrado.
  *
- * Robusto a membretes de alto variable: detecta la fila de encabezado por su
- * contenido ("DESCRIPCION" + "CANT") y mapea columnas por título, no por posición.
- * Lee hasta la fila "PRECIO TOTAL" o el fin de datos. Salta filas de categoría
- * (ITEM sin cantidad).
+ * Robusto a formatos distintos: detecta la fila de encabezado por contenido
+ * ("DESCRIPCIÓN" + una columna de cantidad: CANT/CANTIDAD/UND) y mapea columnas
+ * por título. La cantidad sale de "CANT" si existe; si no, de "UND" (que en las
+ * hojas de equipos contiene los números). Lee hasta la primera fila de TOTAL y
+ * salta filas de categoría (sin cantidad).
  */
-export const parseMetrado = (workbook: WorkBook): ParseMetradoResult => {
-  const warnings: string[] = [];
-  const sheetNames = workbook.SheetNames;
-  const preferred = sheetNames.find((n) => norm(n) === 'COT');
-  const candidates = preferred ? [preferred, ...sheetNames] : sheetNames;
+export const parseMetradoSheet = (workbook: WorkBook, sheetName: string): ParseResult => {
+  const ws = workbook.Sheets[sheetName];
+  if (!ws) return { materiales: [], warnings: [`La hoja "${sheetName}" no existe.`] };
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
 
-  for (const sheetName of candidates) {
-    const ws = workbook.Sheets[sheetName];
-    if (!ws) continue;
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
-
-    // Buscar fila de encabezado: contiene DESCRIPCION y CANT
-    let headerRow = -1;
-    for (let i = 0; i < rows.length; i++) {
-      const cells = rows[i].map(norm);
-      const hasDesc = cells.some((c) => c.includes('DESCRIPCION'));
-      const hasCant = cells.some((c) => c.startsWith('CANT'));
-      if (hasDesc && hasCant) {
-        headerRow = i;
-        break;
-      }
+  // Fila de encabezado: contiene DESCRIPCION y una columna de cantidad
+  let headerRow = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].map(norm);
+    const hasDesc = cells.some((c) => c.includes('DESCRIPCION'));
+    const hasQty = cells.some((c) => c.startsWith('CANT') || c === 'UND' || c === 'UNIDAD' || c === 'UNID');
+    if (hasDesc && hasQty) {
+      headerRow = i;
+      break;
     }
-    if (headerRow === -1) continue;
-
-    // Mapear índices de columna por título
-    const header = rows[headerRow].map(norm);
-    const findCol = (pred: (c: string) => boolean) => header.findIndex(pred);
-    const colItem = findCol((c) => c === 'ITEM');
-    const colCant = findCol((c) => c.startsWith('CANT'));
-    const colDesc = findCol((c) => c.includes('DESCRIPCION'));
-    const colPUnit = findCol((c) => c.includes('UNITARIO') || c === 'P. UNITARIO' || c.includes('P UNITARIO'));
-    if (colCant === -1 || colDesc === -1) continue;
-
-    const materiales: MaterialParsed[] = [];
-    for (let i = headerRow + 1; i < rows.length; i++) {
-      const row = rows[i];
-      // Fin de la tabla principal
-      if (row.some((c) => norm(c).includes('PRECIO TOTAL'))) break;
-
-      const desc = String(row[colDesc] ?? '').trim();
-      if (!desc) continue;
-
-      const cant = toNumber(row[colCant]);
-      // Sin cantidad válida -> fila de categoría/sección -> saltar
-      if (!Number.isFinite(cant) || cant <= 0) continue;
-
-      const precio = colPUnit !== -1 ? toNumber(row[colPUnit]) : NaN;
-      materiales.push({
-        codigo: colItem !== -1 ? formatCodigo(row[colItem]) : '',
-        nombre: desc,
-        cantidad: cant,
-        unidad: 'und',
-        comprado: 0,
-        precio_unitario: Number.isFinite(precio) ? precio : 0,
-        estado: 'PENDIENTE',
-      });
-    }
-
-    if (materiales.length === 0) {
-      warnings.push(`La hoja "${sheetName}" no contiene materiales con cantidad.`);
-      continue;
-    }
-    return { materiales, warnings };
+  }
+  if (headerRow === -1) {
+    return { materiales: [], warnings: [`La hoja "${sheetName}" no tiene un encabezado de materiales reconocible.`] };
   }
 
-  warnings.push('No se encontró una hoja con formato de metrado (encabezado con "DESCRIPCIÓN" y "CANT").');
-  return { materiales: [], warnings };
+  const header = rows[headerRow].map(norm);
+  const find = (pred: (c: string) => boolean) => header.findIndex(pred);
+  const colItem = find((c) => c === 'ITEM');
+  const colCodigo = find((c) => c === 'CODIGO');
+  const colDesc = find((c) => c.includes('DESCRIPCION'));
+  const colCant = find((c) => c.startsWith('CANT'));
+  const colUnd = find((c) => c === 'UND' || c === 'UNIDAD' || c === 'UNID');
+  const colPUnit = find((c) => c.includes('UNITARIO') || c.includes('P.UNIT') || c.includes('P UNIT'));
+
+  // Cantidad: CANT si existe; si no, la columna UND (que trae los números).
+  const colQty = colCant !== -1 ? colCant : colUnd;
+  // UND es unidad de medida solo cuando hay un CANT aparte.
+  const colUnidad = colCant !== -1 ? colUnd : -1;
+  if (colDesc === -1 || colQty === -1) {
+    return { materiales: [], warnings: [`La hoja "${sheetName}" no tiene columnas de descripción/cantidad.`] };
+  }
+
+  const materiales: MaterialParsed[] = [];
+  for (let i = headerRow + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (isTotalRow(row)) break;
+
+    const desc = String(row[colDesc] ?? '').trim();
+    if (!desc) continue;
+
+    const cant = toNumber(row[colQty]);
+    if (!Number.isFinite(cant) || cant <= 0) continue; // fila de categoría/sección
+
+    const codigoRaw = colCodigo !== -1 ? String(row[colCodigo] ?? '').trim() : '';
+    const codigo = codigoRaw || (colItem !== -1 ? formatCodigo(row[colItem]) : '');
+    const unidad = colUnidad !== -1 ? (String(row[colUnidad] ?? '').trim() || 'und') : 'und';
+    const precio = colPUnit !== -1 ? toNumber(row[colPUnit]) : NaN;
+
+    materiales.push({
+      codigo,
+      nombre: desc,
+      cantidad: cant,
+      unidad,
+      comprado: 0,
+      precio_unitario: Number.isFinite(precio) ? precio : 0,
+      estado: 'PENDIENTE',
+    });
+  }
+
+  const warnings = materiales.length === 0 ? [`La hoja "${sheetName}" no contiene materiales con cantidad.`] : [];
+  return { materiales, warnings };
+};
+
+/** Lista las hojas que contienen una tabla de materiales, con su conteo. */
+export const listSheetsWithMateriales = (workbook: WorkBook): SheetOption[] =>
+  workbook.SheetNames
+    .map((name) => ({ name, count: parseMetradoSheet(workbook, name).materiales.length }))
+    .filter((s) => s.count > 0);
+
+/** Hoja sugerida por defecto: la que menciona EQUIPOS, o la de mayor conteo. */
+export const suggestSheet = (sheets: SheetOption[]): string | null => {
+  if (sheets.length === 0) return null;
+  const equipos = sheets.find((s) => /EQUIPO/i.test(s.name));
+  if (equipos) return equipos.name;
+  return [...sheets].sort((a, b) => b.count - a.count)[0].name;
 };

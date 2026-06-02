@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import type { WorkBook } from 'xlsx';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
-import { parseMetrado, type MaterialParsed } from '@/lib/utils/parse-metrado';
+import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet, type MaterialParsed, type SheetOption } from '@/lib/utils/parse-metrado';
 
 interface Props {
   proyecto: Proyecto;
@@ -30,28 +31,53 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   // ---- Importar metrado (Excel) ----
   const canImport = can(user, 'canEditLogistica');
   const metradoInputRef = useRef<HTMLInputElement>(null);
+  const [workbook, setWorkbook] = useState<WorkBook | null>(null);
+  const [sheetOptions, setSheetOptions] = useState<SheetOption[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState('');
   const [parsed, setParsed] = useState<MaterialParsed[] | null>(null);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [metradoFile, setMetradoFile] = useState('');
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
 
+  const parseSheet = (wb: WorkBook, sheet: string) => {
+    const { materiales, warnings } = parseMetradoSheet(wb, sheet);
+    setParsed(materiales);
+    setParseWarnings(warnings);
+    setSelectedSheet(sheet);
+  };
+
   const handleMetradoFile = async (file: File) => {
     setImportMsg('');
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
-      const { materiales, warnings } = parseMetrado(wb);
-      setParsed(materiales);
-      setParseWarnings(warnings);
+      const sheets = listSheetsWithMateriales(wb);
+      setWorkbook(wb);
+      setSheetOptions(sheets);
       setMetradoFile(file.name);
+      if (sheets.length === 0) {
+        setParsed([]);
+        setParseWarnings(['No se encontró ninguna hoja con tabla de materiales.']);
+        setSelectedSheet('');
+      } else {
+        parseSheet(wb, suggestSheet(sheets) ?? sheets[0].name);
+      }
     } catch {
       setParsed([]);
       setParseWarnings(['No se pudo leer el archivo. ¿Es un Excel válido?']);
+      setSheetOptions([]);
       setMetradoFile(file.name);
     } finally {
       if (metradoInputRef.current) metradoInputRef.current.value = '';
     }
+  };
+
+  const closeImport = () => {
+    setParsed(null);
+    setWorkbook(null);
+    setSheetOptions([]);
+    setSelectedSheet('');
   };
 
   const handleConfirmImport = async () => {
@@ -66,7 +92,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
       });
       if (res.ok) {
         await refetch();
-        setParsed(null);
+        closeImport();
         setImportMsg(`${parsed.length} materiales importados a Logística.`);
       } else {
         const body = await res.json().catch(() => ({}));
@@ -297,12 +323,31 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                 <FileSpreadsheet className="w-5 h-5 text-green-400" />
                 Importar metrado
               </h2>
-              <button onClick={() => setParsed(null)} className="text-slate-400 hover:text-white">
+              <button onClick={closeImport} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto">
+              <p className="text-sm text-slate-300 mb-3">
+                Archivo: <span className="text-white">{metradoFile}</span>
+              </p>
+
+              {sheetOptions.length > 0 && (
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Hoja a importar</label>
+                  <select
+                    value={selectedSheet}
+                    onChange={(e) => workbook && parseSheet(workbook, e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    {sheetOptions.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name} — {s.count} materiales</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {parseWarnings.length > 0 && (
                 <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   {parseWarnings.map((w, i) => (
@@ -313,9 +358,6 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
               {parsed.length > 0 ? (
                 <>
-                  <p className="text-sm text-slate-300 mb-1">
-                    Archivo: <span className="text-white">{metradoFile}</span>
-                  </p>
                   <p className="text-sm text-slate-300 mb-4">
                     Se detectaron <span className="text-green-400 font-semibold">{parsed.length} materiales</span>
                     {' · '}Total metrado: <span className="text-white">S/ {totalParsed.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
@@ -353,7 +395,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
             <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-800">
               <button
-                onClick={() => setParsed(null)}
+                onClick={closeImport}
                 className="px-4 py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white rounded-lg transition-colors"
               >
                 Cancelar
