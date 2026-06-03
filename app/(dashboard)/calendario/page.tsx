@@ -2,31 +2,30 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Proyecto, EstadoProyecto } from '@/types';
+import { CalendarDays, AlertTriangle } from 'lucide-react';
+import { Proyecto } from '@/types';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { cn } from '@/lib/utils';
 
-const ESTADO_COLORS: Record<EstadoProyecto, string> = {
-  'EN PRODUCCIÓN': 'bg-blue-500',
-  'LISTO PARA PRUEBAS': 'bg-amber-500',
-  'EN INGENIERÍA': 'bg-cyan-500',
-  'COMPRAS EN CURSO': 'bg-violet-500',
-  RETRASADO: 'bg-red-500',
-  COMPLETADO: 'bg-green-500',
+// Días entre hoy y la fecha de entrega (negativo = vencido)
+const diasRestantes = (fecha: string): number => {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const entrega = new Date(`${fecha}T00:00:00`);
+  return Math.round((entrega.getTime() - hoy.getTime()) / 86400000);
 };
 
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
-const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const fmtFecha = (f: string) => {
+  const [y, m, d] = f.split('-');
+  return `${d}/${m}/${y}`;
+};
+
+const barColor = (p: number) => (p >= 80 ? 'bg-green-500' : p >= 50 ? 'bg-amber-500' : 'bg-red-500');
 
 export default function CalendarioPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
-  const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -36,121 +35,105 @@ export default function CalendarioPage() {
         setProyectos(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Error fetching proyectos:', err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
   }, []);
 
-  // Mapa fecha (YYYY-MM-DD) -> proyectos con entrega ese día
-  const eventos = useMemo(() => {
-    const map = new Map<string, Proyecto[]>();
-    for (const p of proyectos) {
-      const fecha = p.comercial?.fecha_entrega;
-      if (!fecha) continue;
-      const key = fecha.split('T')[0];
-      const arr = map.get(key) ?? [];
-      arr.push(p);
-      map.set(key, arr);
-    }
-    return map;
-  }, [proyectos]);
-
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const cells: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-
-  const prevMonth = () => {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear((y) => y - 1);
-    } else setViewMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear((y) => y + 1);
-    } else setViewMonth((m) => m + 1);
-  };
-
-  const todayKey = new Date().toISOString().split('T')[0];
+  // Solo los que tienen fecha de entrega, ordenados por la más próxima primero
+  const conEntrega = useMemo(
+    () =>
+      proyectos
+        .filter((p) => p.comercial?.fecha_entrega)
+        .sort((a, b) => (a.comercial!.fecha_entrega < b.comercial!.fecha_entrega ? -1 : 1)),
+    [proyectos]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Calendario</h1>
-          <p className="text-slate-400 mt-1">Fechas de entrega de proyectos</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={prevMonth} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="text-white font-semibold min-w-[160px] text-center">
-            {MESES[viewMonth]} {viewYear}
-          </span>
-          <button onClick={nextMonth} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <CalendarDays className="w-6 h-6 text-blue-400" />
+          Calendario de Entregas
+        </h1>
+        <p className="text-slate-400 mt-1">{conEntrega.length} órdenes con fecha de entrega programada</p>
       </div>
 
-      <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-4">
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {DIAS.map((d) => (
-            <div key={d} className="text-center text-xs font-medium text-slate-400 py-2">{d}</div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-56 bg-slate-800/40 rounded-xl animate-pulse" />
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((day, idx) => {
-            if (day === null) return <div key={`empty-${idx}`} className="aspect-square" />;
-            const key = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayEventos = eventos.get(key) ?? [];
-            const isToday = key === todayKey;
+      ) : conEntrega.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <CalendarDays className="w-14 h-14 mx-auto mb-3 opacity-30" />
+          <p>No hay órdenes con fecha de entrega programada.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {conEntrega.map((p) => {
+            const fecha = p.comercial!.fecha_entrega;
+            const dias = diasRestantes(fecha);
+            const vencido = dias < 0;
+            const progreso = p.produccion?.progreso || 0;
+            const resp = (p.usuario_nombre || '').split(' ')[0] || '—';
+
             return (
-              <div
-                key={key}
-                className={cn(
-                  'aspect-square rounded-lg border p-1.5 flex flex-col gap-1 overflow-hidden',
-                  isToday ? 'border-blue-500 bg-blue-500/5' : 'border-slate-800 bg-slate-900/30'
-                )}
+              <button
+                key={p.id}
+                onClick={() => router.push(`/proyectos/${p.id}`)}
+                className="text-left bg-[var(--navy2)] rounded-xl border border-slate-800 p-4 hover:border-slate-600 hover:-translate-y-0.5 transition-all"
               >
-                <span className={cn('text-xs font-medium', isToday ? 'text-blue-400' : 'text-slate-400')}>{day}</span>
-                <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {dayEventos.slice(0, 3).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => router.push(`/proyectos/${p.id}`)}
-                      title={`${p.id} · ${p.cliente} · ${p.estado}`}
-                      className={cn(
-                        'text-[10px] leading-tight text-white rounded px-1 py-0.5 truncate text-left hover:opacity-80 transition-opacity',
-                        ESTADO_COLORS[p.estado] ?? 'bg-slate-500'
-                      )}
-                    >
-                      {p.cliente}
-                    </button>
-                  ))}
-                  {dayEventos.length > 3 && (
-                    <span className="text-[10px] text-slate-500">+{dayEventos.length - 3} más</span>
-                  )}
+                {/* Cabecera */}
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <p className="text-blue-400 font-mono font-semibold">{p.id}</p>
+                    <p className="text-sm text-slate-300 truncate">{p.cliente}</p>
+                  </div>
+                  <StatusBadge estado={p.estado} />
                 </div>
-              </div>
+
+                {/* Caja de fecha */}
+                <div
+                  className={cn(
+                    'flex items-start gap-3 p-3 rounded-lg border mb-3',
+                    vencido ? 'bg-red-500/10 border-red-500/30' : 'bg-blue-500/10 border-blue-500/30'
+                  )}
+                >
+                  <CalendarDays className={cn('w-5 h-5 mt-0.5 shrink-0', vencido ? 'text-red-400' : 'text-blue-300')} />
+                  <div>
+                    <p className={cn('text-lg font-bold', vencido ? 'text-red-400' : 'text-blue-200')}>{fmtFecha(fecha)}</p>
+                    <p className={cn('text-xs flex items-center gap-1', vencido ? 'text-red-300' : 'text-slate-400')}>
+                      {vencido && <AlertTriangle className="w-3 h-3" />}
+                      {dias === 0 ? 'Entrega hoy' : vencido ? `Retrasado ${Math.abs(dias)} días` : `Faltan ${dias} días`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Producción */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                    <span>Producción</span>
+                    <span className="font-medium text-white">{progreso}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div className={cn('h-full rounded-full transition-all', barColor(progreso))} style={{ width: `${progreso}%` }} />
+                  </div>
+                </div>
+
+                {/* Pie */}
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Resp: {resp}</span>
+                  <span>Monto: S/ {p.monto.toLocaleString('es-PE')}</span>
+                </div>
+              </button>
             );
           })}
         </div>
-      </div>
-
-      {/* Leyenda */}
-      <div className="flex flex-wrap gap-4">
-        {(Object.keys(ESTADO_COLORS) as EstadoProyecto[]).map((estado) => (
-          <div key={estado} className="flex items-center gap-2">
-            <span className={cn('w-3 h-3 rounded', ESTADO_COLORS[estado])} />
-            <span className="text-xs text-slate-400">{estado}</span>
-          </div>
-        ))}
-      </div>
+      )}
     </div>
   );
 }

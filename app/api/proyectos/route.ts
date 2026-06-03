@@ -12,7 +12,8 @@ export async function GET() {
       .from('proyectos')
       .select(`
         *,
-        proyecto_comercial (fecha_entrega, dias_plazo, adelanto, adelanto_fijado, metrado, alerta)
+        proyecto_comercial (fecha_entrega, dias_plazo, adelanto, adelanto_fijado, metrado, alerta),
+        proyecto_produccion (progreso)
       `)
       .order('created_at', { ascending: false });
 
@@ -20,14 +21,21 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // El embed de Supabase devuelve un OBJETO (no array) cuando la FK es única
+    // (proyecto_comercial/produccion tienen proyecto_id único). Normalizamos ambos casos.
+    const one = (v: unknown) => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+
     const hoy = new Date().toISOString().split('T')[0];
     const formatted = proyectos.map((p) => {
-      const comercial = p.proyecto_comercial?.[0] || null;
+      const comercial = one(p.proyecto_comercial);
+      const produccion = one(p.proyecto_produccion);
       return {
         ...p,
         estado: aplicarRetraso(p.estado, comercial?.fecha_entrega, hoy),
         comercial,
+        produccion,
         proyecto_comercial: undefined,
+        proyecto_produccion: undefined,
       };
     });
 
