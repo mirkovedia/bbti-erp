@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { PERMS } from '@/lib/auth/permissions';
-import { computeEstadoProyecto } from '@/lib/utils/estado-proyecto';
+import { computeEstadoProyecto, aplicarRetraso } from '@/lib/utils/estado-proyecto';
 import type { Permissions, Rol } from '@/types';
 
 export async function GET(
@@ -59,6 +59,10 @@ export async function GET(
       } : null,
       documentos: documentos.data || [],
     };
+
+    // Overlay RETRASADO según la fecha de entrega (se calcula al leer)
+    const hoy = new Date().toISOString().split('T')[0];
+    fullProyecto.estado = aplicarRetraso(proyecto.estado, comercial.data?.fecha_entrega, hoy);
 
     return NextResponse.json(fullProyecto);
   } catch (err) {

@@ -1,5 +1,5 @@
 // Test de la lógica de estado automático. Ejecutar: npx tsx scripts/test-estado-proyecto.ts
-import { computeEstadoProyecto, computeFlow } from '../lib/utils/estado-proyecto';
+import { computeEstadoProyecto, computeFlow, aplicarRetraso } from '../lib/utils/estado-proyecto';
 
 let pass = 0, fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? 'OK  ' : 'XX  ') + m); c ? pass++ : fail++; };
@@ -33,6 +33,12 @@ ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsParcial, e
 // computeFlow acumulativo
 const f = computeFlow({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasOk, pruebas: true, envio: true });
 ok(f.ingenieria && f.logistica && f.produccion && f.pruebas && f.completado, 'computeFlow: todas las etapas true al completar');
+
+// --- RETRASADO (overlay por fecha) ---
+ok(aplicarRetraso('EN PRODUCCIÓN', '2026-01-01', '2026-06-02') === 'RETRASADO', 'fecha vencida + no completado → RETRASADO');
+ok(aplicarRetraso('EN PRODUCCIÓN', '2026-12-31', '2026-06-02') === 'EN PRODUCCIÓN', 'fecha futura → no retrasado');
+ok(aplicarRetraso('COMPLETADO', '2026-01-01', '2026-06-02') === 'COMPLETADO', 'completado nunca es retrasado (aunque venza)');
+ok(aplicarRetraso('EN INGENIERÍA', null, '2026-06-02') === 'EN INGENIERÍA', 'sin fecha de entrega → no retrasado');
 
 console.log(`\n===== ${pass} OK / ${fail} fallos =====`);
 process.exit(fail ? 1 : 0);

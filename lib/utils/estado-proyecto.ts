@@ -60,6 +60,21 @@ export const computeEstadoProyecto = (input: EstadoInput): EstadoProyecto => {
   return 'EN INGENIERÍA';
 };
 
+/**
+ * Superpone el estado RETRASADO: si la fecha de entrega ya pasó y el proyecto
+ * no está completado, se muestra como RETRASADO (sin perder su avance real, que
+ * lo refleja el stepper). Se calcula al LEER porque depende de la fecha de hoy.
+ */
+export const aplicarRetraso = (
+  estado: EstadoProyecto,
+  fechaEntrega?: string | null,
+  hoy?: string
+): EstadoProyecto => {
+  if (estado === 'COMPLETADO') return estado;
+  if (!fechaEntrega || !hoy) return estado;
+  return fechaEntrega < hoy ? 'RETRASADO' : estado;
+};
+
 /** Índice de la etapa activa (primera no terminada) para el stepper. 0..4 */
 export const activeStageIndex = (f: FlowProgress): number => {
   if (f.completado) return 4; // Completado

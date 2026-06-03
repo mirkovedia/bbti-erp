@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { PERMS } from '@/lib/auth/permissions';
+import { aplicarRetraso } from '@/lib/utils/estado-proyecto';
 import type { Rol } from '@/types';
 import { NextResponse } from 'next/server';
 
@@ -19,11 +20,16 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const formatted = proyectos.map((p) => ({
-      ...p,
-      comercial: p.proyecto_comercial?.[0] || null,
-      proyecto_comercial: undefined,
-    }));
+    const hoy = new Date().toISOString().split('T')[0];
+    const formatted = proyectos.map((p) => {
+      const comercial = p.proyecto_comercial?.[0] || null;
+      return {
+        ...p,
+        estado: aplicarRetraso(p.estado, comercial?.fecha_entrega, hoy),
+        comercial,
+        proyecto_comercial: undefined,
+      };
+    });
 
     return NextResponse.json(formatted);
   } catch (err) {

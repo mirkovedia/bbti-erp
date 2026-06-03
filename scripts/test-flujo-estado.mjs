@@ -38,5 +38,22 @@ await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: H, body: 
 expect(await getEstado(id), 'LISTO PARA PRUEBAS', '⑥ Desmarcar envío (retrocede)');
 
 await svc.from('proyectos').delete().eq('id', id);
-console.log(`\n===== ${pass} OK / ${fail} fallos ===== (limpiado ${id})`);
+
+// --- RETRASADO: proyecto con fecha de entrega vencida ---
+const proy2 = await (await fetch(`${BASE}/api/proyectos`, { method: 'POST', headers: H,
+  body: JSON.stringify({ cliente: 'PRUEBA RETRASO SAC', monto: 10000, fecha_entrega: '2024-01-01', dias_plazo: 30 }) })).json();
+const id2 = proy2.id;
+expect(await getEstado(id2), 'RETRASADO', '⑦ Fecha vencida (overlay RETRASADO)');
+// al completarlo, ya no es retrasado
+const { data: etapas2 } = await svc.from('proyecto_etapas').select('id').eq('proyecto_id', id2);
+await fetch(`${BASE}/api/proyectos/${id2}`, { method: 'PATCH', headers: H, body: JSON.stringify({
+  ingenieria: { estado_planos: 'Aprobados' },
+  materiales: [{ nombre: 'X', cantidad: 1, unidad: 'und', comprado: 1, estado: 'COMPLETO' }],
+  etapas: etapas2.map(e => ({ id: e.id, estado: 'COMPLETADO' })),
+  produccion: { progreso: 100, pruebas: true, envio: true },
+}) });
+expect(await getEstado(id2), 'COMPLETADO', '⑧ Completado vencido → COMPLETADO (no RETRASADO)');
+await svc.from('proyectos').delete().eq('id', id2);
+
+console.log(`\n===== ${pass} OK / ${fail} fallos ===== (limpiados ${id}, ${id2})`);
 process.exit(fail ? 1 : 0);
