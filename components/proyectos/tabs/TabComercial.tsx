@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2 } from 'lucide-react';
+import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2, Paperclip, Download, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { WorkBook } from 'xlsx';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
+import { createClient } from '@/lib/supabase/client';
+import { DOCUMENTOS_BUCKET } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet, type MaterialParsed, type SheetOption } from '@/lib/utils/parse-metrado';
+
+const COMPROBANTE_PREFIX = 'Comprobante adelanto: ';
 
 interface Props {
   proyecto: Proyecto;
@@ -23,10 +28,21 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   const [diasPlazo, setDiasPlazo] = useState(comercial?.dias_plazo || 0);
   const [adelanto, setAdelanto] = useState(comercial?.adelanto || 0);
   const [metrado, setMetrado] = useState(comercial?.metrado || '');
-  const [alerta, setAlerta] = useState(comercial?.alerta || '');
   const [saving, setSaving] = useState(false);
   const [nuevoComentario, setNuevoComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  // ---- Comprobante del adelanto (toggle + subida) ----
+  const comprobante = (proyecto.documentos || []).find((d) => (d.nombre || '').startsWith(COMPROBANTE_PREFIX));
+  const [mostrarComprobante, setMostrarComprobante] = useState(false);
+  const comprobanteInputRef = useRef<HTMLInputElement>(null);
+  const [subiendoComp, setSubiendoComp] = useState(false);
+  const [compError, setCompError] = useState('');
+
+  useEffect(() => {
+    setMostrarComprobante(!!comprobante);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto.id, comprobante?.id]);
 
   // ---- Importar metrado (Excel) ----
   const canImport = can(user, 'canEditLogistica');
@@ -111,9 +127,49 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
     setDiasPlazo(comercial?.dias_plazo || 0);
     setAdelanto(comercial?.adelanto || 0);
     setMetrado(comercial?.metrado || '');
-    setAlerta(comercial?.alerta || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto.id]);
+
+  // Subir comprobante del adelanto (reusa el flujo de documentos)
+  const handleComprobante = async (file: File) => {
+    setCompError('');
+    setSubiendoComp(true);
+    try {
+      const urlRes = await fetch('/api/documentos/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto_id: proyecto.id, filename: file.name }),
+      });
+      if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
+      const { path, token } = await urlRes.json();
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage.from(DOCUMENTOS_BUCKET).uploadToSignedUrl(path, token, file);
+      if (upErr) throw new Error(upErr.message);
+      const tipo = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : null;
+      const metaRes = await fetch('/api/documentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto_id: proyecto.id, nombre: COMPROBANTE_PREFIX + file.name, tipo, storage_path: path }),
+      });
+      if (!metaRes.ok) throw new Error('No se pudo registrar el comprobante');
+      await refetch();
+    } catch (e) {
+      setCompError(e instanceof Error ? e.message : 'Error al subir');
+    } finally {
+      setSubiendoComp(false);
+      if (comprobanteInputRef.current) comprobanteInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadComprobante = async () => {
+    if (!comprobante?.storage_path) return;
+    const res = await fetch('/api/documentos/download-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storage_path: comprobante.storage_path }),
+    });
+    if (res.ok) { const { url } = await res.json(); window.open(url, '_blank'); }
+  };
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
@@ -146,13 +202,13 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          comercial: { fecha_entrega: fechaEntrega, dias_plazo: diasPlazo, adelanto, metrado, alerta },
+          comercial: { fecha_entrega: fechaEntrega, dias_plazo: diasPlazo, adelanto, metrado },
         }),
       });
       if (res.ok) {
         onUpdate({
           ...proyecto,
-          comercial: { ...proyecto.comercial!, fecha_entrega: fechaEntrega, dias_plazo: diasPlazo, adelanto, adelanto_fijado: proyecto.comercial?.adelanto_fijado || false, metrado, alerta, comentarios: proyecto.comercial?.comentarios || [] },
+          comercial: { ...proyecto.comercial!, fecha_entrega: fechaEntrega, dias_plazo: diasPlazo, adelanto, adelanto_fijado: proyecto.comercial?.adelanto_fijado || false, metrado, alerta: proyecto.comercial?.alerta || '', comentarios: proyecto.comercial?.comentarios || [] },
         });
       }
     } finally {
@@ -203,6 +259,61 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
             disabled={!canEdit}
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+
+          {/* Toggle: comprobante del adelanto */}
+          {canEdit && (
+            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={mostrarComprobante}
+                onClick={() => setMostrarComprobante((v) => !v)}
+                className={cn(
+                  'relative w-9 h-5 rounded-full transition-colors',
+                  mostrarComprobante ? 'bg-blue-600' : 'bg-slate-700'
+                )}
+              >
+                <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', mostrarComprobante && 'translate-x-4')} />
+              </button>
+              <span className="text-xs text-slate-400 flex items-center gap-1"><Paperclip className="w-3 h-3" /> Comprobante del adelanto</span>
+            </label>
+          )}
+
+          {mostrarComprobante && (
+            <div className="mt-2">
+              {comprobante ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-slate-700">
+                  <Paperclip className="w-4 h-4 text-green-400 shrink-0" />
+                  <span className="flex-1 text-xs text-white truncate">{comprobante.nombre.replace(COMPROBANTE_PREFIX, '')}</span>
+                  <button onClick={handleDownloadComprobante} title="Descargar" className="p-1 text-slate-400 hover:text-white">
+                    <Download className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 mb-1">Sin comprobante adjunto.</p>
+              )}
+              {canEdit && (
+                <>
+                  <input
+                    ref={comprobanteInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleComprobante(f); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => comprobanteInputRef.current?.click()}
+                    disabled={subiendoComp}
+                    className="mt-1 flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {subiendoComp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    {subiendoComp ? 'Subiendo...' : comprobante ? 'Reemplazar comprobante' : 'Subir comprobante'}
+                  </button>
+                  {compError && <p className="text-xs text-red-400 mt-1">{compError}</p>}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
@@ -243,19 +354,6 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
           {importMsg && <p className="text-xs text-green-400 mt-1">{importMsg}</p>}
         </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-slate-400 mb-1.5">
-            Alerta
-          </label>
-          <input
-            type="text"
-            value={alerta}
-            onChange={(e) => setAlerta(e.target.value)}
-            disabled={!canEdit}
-            placeholder="Nota de alerta..."
-            className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
       </div>
 
       {/* Save button */}

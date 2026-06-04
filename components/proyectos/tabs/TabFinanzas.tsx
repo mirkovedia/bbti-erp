@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DollarSign, Calendar, AlertTriangle, Lock, PlusCircle, Save, PieChart, BarChart3 } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -29,17 +29,10 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   const pctPagado = montoTotal > 0 ? Math.round((pagado / montoTotal) * 100) : 0;
   const pctAvance = proyecto.produccion?.progreso || 0;
 
-  const [alerta, setAlerta] = useState(proyecto.finanzas?.alerta || '');
-  const [savingNota, setSavingNota] = useState(false);
   const [pagoMonto, setPagoMonto] = useState(0);
   const [pagoFecha, setPagoFecha] = useState('');
   const [pagoNota, setPagoNota] = useState('');
   const [agregandoPago, setAgregandoPago] = useState(false);
-
-  useEffect(() => {
-    setAlerta(proyecto.finanzas?.alerta || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto.id]);
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
@@ -67,20 +60,6 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
       if (res.ok) { setPagoMonto(0); setPagoFecha(''); setPagoNota(''); await refetch(); }
     } finally {
       setAgregandoPago(false);
-    }
-  };
-
-  const handleGuardarNota = async () => {
-    setSavingNota(true);
-    try {
-      const res = await fetch(`/api/proyectos/${proyecto.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finanzas: { alerta } }),
-      });
-      if (res.ok) await refetch();
-    } finally {
-      setSavingNota(false);
     }
   };
 
@@ -189,29 +168,6 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
           </div>
         </div>
 
-        {/* Alertas financieras */}
-        <div>
-          <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" /> Alertas financieras
-          </h3>
-          <textarea
-            value={alerta}
-            onChange={(e) => setAlerta(e.target.value)}
-            disabled={!canEdit}
-            placeholder="Agregar nota financiera..."
-            rows={3}
-            className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm disabled:opacity-50 focus:ring-2 focus:ring-blue-500 resize-y"
-          />
-          {canEdit && (
-            <button
-              onClick={handleGuardarNota}
-              disabled={savingNota}
-              className="mt-2 flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" /> {savingNota ? 'Guardando...' : 'Guardar nota'}
-            </button>
-          )}
-        </div>
       </div>
 
       {/* ───── Columna derecha: visualización ───── */}
