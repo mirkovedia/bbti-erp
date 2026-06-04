@@ -76,6 +76,7 @@ export interface Documento {
   tipo: string | null;
   storage_path: string | null;
   subido_por: string | null;
+  estado: string | null;
   created_at: string;
 }
 

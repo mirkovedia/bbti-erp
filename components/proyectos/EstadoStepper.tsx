@@ -13,7 +13,7 @@ interface Props {
 /** Barra de progreso del flujo: Ingeniería → Logística → Producción → Pruebas → Completado. */
 export const EstadoStepper = ({ proyecto }: Props) => {
   const flow = computeFlow({
-    estadoPlanos: proyecto.ingenieria?.estado_planos,
+    documentos: proyecto.documentos,
     materiales: proyecto.logistica?.materiales,
     etapas: proyecto.produccion?.etapas,
     pruebas: proyecto.produccion?.pruebas,

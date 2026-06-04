@@ -6,7 +6,8 @@ import type { EstadoProyecto } from '@/types';
  */
 
 export interface EstadoInput {
-  estadoPlanos?: string | null;
+  /** Documentos del proyecto; los planos están "aprobados" si alguno tiene estado "Aprobados y firmados". */
+  documentos?: { estado?: string | null }[];
   materiales?: { estado?: string | null }[];
   etapas?: { estado?: string | null }[];
   pruebas?: boolean | null;
@@ -16,7 +17,9 @@ export interface EstadoInput {
 export const FLOW_STAGES = ['Ingeniería', 'Logística', 'Producción', 'Pruebas', 'Completado'] as const;
 export type FlowStage = (typeof FLOW_STAGES)[number];
 
-const planosAprobados = (e?: string | null): boolean => !!e && /aprobad|entregad/i.test(e);
+// Planos aprobados: algún documento (versión) está en "Aprobados y firmados".
+const planosAprobados = (docs?: { estado?: string | null }[]): boolean =>
+  (docs ?? []).some((d) => !!d.estado && /aprobad/i.test(d.estado));
 
 export interface FlowProgress {
   /** Ingeniería terminada: planos aprobados */
@@ -33,7 +36,7 @@ export interface FlowProgress {
 
 /** Calcula qué etapas del flujo están terminadas (acumulativo: cada una requiere la anterior). */
 export const computeFlow = (input: EstadoInput): FlowProgress => {
-  const planos = planosAprobados(input.estadoPlanos);
+  const planos = planosAprobados(input.documentos);
   const mats = input.materiales ?? [];
   const materialesOk = mats.length > 0 && mats.every((m) => m.estado === 'COMPLETO');
   const etapas = input.etapas ?? [];

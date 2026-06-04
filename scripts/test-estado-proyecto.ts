@@ -8,30 +8,30 @@ const ok = (c: boolean, m: string) => { console.log((c ? 'OK  ' : 'XX  ') + m); 
 ok(computeEstadoProyecto({}) === 'EN INGENIERÍA', 'vacío → EN INGENIERÍA');
 
 // Planos aprobados → COMPRAS EN CURSO
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados' }) === 'COMPRAS EN CURSO', 'planos aprobados → COMPRAS EN CURSO');
-ok(computeEstadoProyecto({ estadoPlanos: 'En revisión' }) === 'EN INGENIERÍA', 'planos en revisión → sigue EN INGENIERÍA');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }] }) === 'COMPRAS EN CURSO', 'planos aprobados → COMPRAS EN CURSO');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'En proceso' }] }) === 'EN INGENIERÍA', 'plano en proceso → sigue EN INGENIERÍA');
 
 // + materiales completos → EN PRODUCCIÓN
 const matsOk = [{ estado: 'COMPLETO' }, { estado: 'COMPLETO' }];
 const matsParcial = [{ estado: 'COMPLETO' }, { estado: 'PENDIENTE' }];
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsOk }) === 'EN PRODUCCIÓN', 'planos+materiales → EN PRODUCCIÓN');
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsParcial }) === 'COMPRAS EN CURSO', 'materiales parciales → sigue COMPRAS EN CURSO');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk }) === 'EN PRODUCCIÓN', 'planos+materiales → EN PRODUCCIÓN');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsParcial }) === 'COMPRAS EN CURSO', 'materiales parciales → sigue COMPRAS EN CURSO');
 
 // + producción 100% → LISTO PARA PRUEBAS
 const etapasOk = [{ estado: 'COMPLETADO' }, { estado: 'COMPLETADO' }];
 const etapasParcial = [{ estado: 'COMPLETADO' }, { estado: 'PENDIENTE' }];
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasOk }) === 'LISTO PARA PRUEBAS', 'producción 100% → LISTO PARA PRUEBAS');
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasParcial }) === 'EN PRODUCCIÓN', 'producción parcial → sigue EN PRODUCCIÓN');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk, etapas: etapasOk }) === 'LISTO PARA PRUEBAS', 'producción 100% → LISTO PARA PRUEBAS');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk, etapas: etapasParcial }) === 'EN PRODUCCIÓN', 'producción parcial → sigue EN PRODUCCIÓN');
 
 // + pruebas + envío → COMPLETADO
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasOk, pruebas: true, envio: true }) === 'COMPLETADO', 'pruebas+envío → COMPLETADO');
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasOk, pruebas: true, envio: false }) === 'LISTO PARA PRUEBAS', 'pruebas sin envío → sigue LISTO PARA PRUEBAS');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk, etapas: etapasOk, pruebas: true, envio: true }) === 'COMPLETADO', 'pruebas+envío → COMPLETADO');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk, etapas: etapasOk, pruebas: true, envio: false }) === 'LISTO PARA PRUEBAS', 'pruebas sin envío → sigue LISTO PARA PRUEBAS');
 
 // No se puede saltar etapas: producción sin materiales no avanza
-ok(computeEstadoProyecto({ estadoPlanos: 'Aprobados', materiales: matsParcial, etapas: etapasOk }) === 'COMPRAS EN CURSO', 'no salta etapas (producción sin materiales)');
+ok(computeEstadoProyecto({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsParcial, etapas: etapasOk }) === 'COMPRAS EN CURSO', 'no salta etapas (producción sin materiales)');
 
 // computeFlow acumulativo
-const f = computeFlow({ estadoPlanos: 'Aprobados', materiales: matsOk, etapas: etapasOk, pruebas: true, envio: true });
+const f = computeFlow({ documentos: [{ estado: 'Aprobados y firmados' }], materiales: matsOk, etapas: etapasOk, pruebas: true, envio: true });
 ok(f.ingenieria && f.logistica && f.produccion && f.pruebas && f.completado, 'computeFlow: todas las etapas true al completar');
 
 // --- RETRASADO (overlay por fecha) ---

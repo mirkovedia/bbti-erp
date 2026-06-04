@@ -18,8 +18,10 @@ const proy = await (await fetch(`${BASE}/api/proyectos`, { method: 'POST', heade
 const id = proy.id;
 expect(proy.estado, 'EN INGENIERÍA', '① Crear');
 
-await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: H, body: JSON.stringify({ ingenieria: { estado_planos: 'Aprobados' } }) });
-expect(await getEstado(id), 'COMPRAS EN CURSO', '② Planos aprobados');
+// Aprobar planos = subir un documento y ponerle estado "Aprobados y firmados"
+const { data: docPlano } = await svc.from('proyecto_documentos').insert({ proyecto_id: id, nombre: 'plano_v1.pdf' }).select('id').single();
+await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: H, body: JSON.stringify({ updateDocumento: { id: docPlano.id, estado: 'Aprobados y firmados' } }) });
+expect(await getEstado(id), 'COMPRAS EN CURSO', '② Plano aprobado y firmado');
 
 await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: H, body: JSON.stringify({ materiales: [
   { nombre: 'Interruptor 2P 200A', cantidad: 8, unidad: 'und', comprado: 8, estado: 'COMPLETO' },
@@ -46,8 +48,8 @@ const id2 = proy2.id;
 expect(await getEstado(id2), 'RETRASADO', '⑦ Fecha vencida (overlay RETRASADO)');
 // al completarlo, ya no es retrasado
 const { data: etapas2 } = await svc.from('proyecto_etapas').select('id').eq('proyecto_id', id2);
+await svc.from('proyecto_documentos').insert({ proyecto_id: id2, nombre: 'plano.pdf', estado: 'Aprobados y firmados' });
 await fetch(`${BASE}/api/proyectos/${id2}`, { method: 'PATCH', headers: H, body: JSON.stringify({
-  ingenieria: { estado_planos: 'Aprobados' },
   materiales: [{ nombre: 'X', cantidad: 1, unidad: 'und', comprado: 1, estado: 'COMPLETO' }],
   etapas: etapas2.map(e => ({ id: e.id, estado: 'COMPLETADO' })),
   produccion: { progreso: 100, pruebas: true, envio: true },

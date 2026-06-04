@@ -103,7 +103,7 @@ export async function PATCH(
     const requiere: Array<[boolean, keyof Permissions]> = [
       [body.cliente !== undefined || body.monto !== undefined || body.estado !== undefined, 'canEdit'],
       [body.comercial !== undefined || body.addComentario !== undefined, 'canEditComercial'],
-      [body.ingenieria !== undefined || body.addObservacion !== undefined, 'canEditIngenieria'],
+      [body.ingenieria !== undefined || body.addObservacion !== undefined || body.updateDocumento !== undefined, 'canEditIngenieria'],
       [body.materiales !== undefined, 'canEditLogistica'],
       [body.produccion !== undefined || body.etapas !== undefined, 'canEditProduccion'],
       [body.finanzas !== undefined || body.addPago !== undefined, 'canEditFinance'],
@@ -173,6 +173,15 @@ export async function PATCH(
       }
     }
 
+    // Estado de un documento (versión de plano)
+    if (body.updateDocumento?.id) {
+      await supabase
+        .from('proyecto_documentos')
+        .update({ estado: body.updateDocumento.estado ?? null })
+        .eq('id', body.updateDocumento.id)
+        .eq('proyecto_id', id);
+    }
+
     // Etapas — actualización puntual de estado por id
     if (Array.isArray(body.etapas)) {
       await Promise.all(
@@ -213,14 +222,15 @@ export async function PATCH(
     }
 
     // Estado automático: recalcular desde el avance real de las áreas y persistir.
-    const [ing, mats, etps, prod] = await Promise.all([
-      supabase.from('proyecto_ingenieria').select('estado_planos').eq('proyecto_id', id).maybeSingle(),
+    // Planos = documentos (versiones); aprobado si alguno está "Aprobados y firmados".
+    const [docs, mats, etps, prod] = await Promise.all([
+      supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
       supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
       supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
       supabase.from('proyecto_produccion').select('pruebas, envio').eq('proyecto_id', id).maybeSingle(),
     ]);
     const nuevoEstado = computeEstadoProyecto({
-      estadoPlanos: ing.data?.estado_planos,
+      documentos: docs.data ?? [],
       materiales: mats.data ?? [],
       etapas: etps.data ?? [],
       pruebas: prod.data?.pruebas,

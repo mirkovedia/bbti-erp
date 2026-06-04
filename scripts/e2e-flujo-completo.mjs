@@ -1,6 +1,7 @@
 // E2E REAL del flujo: crea un proyecto (API), y EN EL NAVEGADOR sube el metrado
 // real, recorre las 5 áreas y verifica que el estado avanza hasta COMPLETADO.
 import { chromium } from 'playwright';
+import fs from 'fs';
 import { getAuthCookie, serviceClient } from './lib/supabase-test.mjs';
 
 const BASE = 'http://localhost:3000';
@@ -62,13 +63,18 @@ try {
   const titLog = (await page.locator('text=/Materiales \\(/').first().textContent().catch(() => '')) || '';
   check(titLog.includes('(73)'), `Logística cargó 73 materiales (${titLog.trim()})`);
 
-  // ③ INGENIERÍA: aprobar planos → COMPRAS EN CURSO
-  log('\n③ Ingeniería: aprobar planos...');
+  // ③ INGENIERÍA: subir un plano y ponerlo "Aprobados y firmados" → COMPRAS EN CURSO
+  log('\n③ Ingeniería: subir plano y aprobarlo...');
   await tab('Ingeniería');
-  await page.locator('select').first().selectOption({ label: 'Aprobados' });
-  await clic('Guardar');
+  const planoTmp = 'scripts/_plano_v1.pdf';
+  fs.writeFileSync(planoTmp, 'plano de prueba ' + Date.now());
+  await page.locator('input[type="file"]').first().setInputFiles(planoTmp);
+  await page.waitForTimeout(4500);
+  // poner el estado del documento a "Aprobados y firmados"
+  await page.locator('select').first().selectOption('Aprobados y firmados');
   await page.waitForTimeout(2800);
-  check((await badge()) === 'COMPRAS EN CURSO', `planos aprobados → COMPRAS EN CURSO (${await badge()})`);
+  fs.unlinkSync(planoTmp);
+  check((await badge()) === 'COMPRAS EN CURSO', `plano aprobado y firmado → COMPRAS EN CURSO (${await badge()})`);
 
   // ④ LOGÍSTICA: comprar todos los materiales → EN PRODUCCIÓN
   log('\n④ Logística: comprar todos los materiales...');
