@@ -1,7 +1,15 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { PERMS } from '@/lib/auth/permissions';
-import { computeEstadoProyecto, aplicarRetraso } from '@/lib/utils/estado-proyecto';
+import {
+  aplicarRetraso,
+  computeEstadoFromConfirmaciones,
+  computeReadiness,
+  cascadeEtapas,
+  permForEtapa,
+  FLOW_ETAPAS,
+  type EtapaFlujo,
+} from '@/lib/utils/estado-proyecto';
 import type { Permissions, Rol } from '@/types';
 
 export async function GET(
@@ -23,7 +31,7 @@ export async function GET(
     }
 
     // Fetch all related data in parallel
-    const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos] = await Promise.all([
+    const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos, confirmaciones] = await Promise.all([
       supabase.from('proyecto_comercial').select('*').eq('proyecto_id', id).maybeSingle(),
       supabase.from('proyecto_ingenieria').select('*').eq('proyecto_id', id).maybeSingle(),
       supabase.from('proyecto_materiales').select('*').eq('proyecto_id', id).order('id'),
@@ -34,6 +42,7 @@ export async function GET(
       supabase.from('proyecto_comentarios').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
       supabase.from('proyecto_observaciones').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
       supabase.from('proyecto_documentos').select('*').eq('proyecto_id', id).order('created_at', { ascending: false }),
+      supabase.from('proyecto_confirmaciones').select('*').eq('proyecto_id', id),
     ]);
 
     const fullProyecto = {
@@ -58,11 +67,14 @@ export async function GET(
         pagos: pagos.data || [],
       } : null,
       documentos: documentos.data || [],
+      confirmaciones: confirmaciones.data || [],
     };
 
-    // Overlay RETRASADO según la fecha de entrega (se calcula al leer)
+    // Estado derivado de las firmas de etapa + overlay RETRASADO al leer
     const hoy = new Date().toISOString().split('T')[0];
-    fullProyecto.estado = aplicarRetraso(proyecto.estado, comercial.data?.fecha_entrega, hoy);
+    const confirmadas = new Set((confirmaciones.data ?? []).map((c) => c.etapa as EtapaFlujo));
+    const estadoBase = computeEstadoFromConfirmaciones(confirmadas);
+    fullProyecto.estado = aplicarRetraso(estadoBase, comercial.data?.fecha_entrega, hoy);
 
     return NextResponse.json(fullProyecto);
   } catch (err) {
@@ -115,6 +127,56 @@ export async function PATCH(
           { status: 403 }
         );
       }
+    }
+
+    // Confirmar una etapa del flujo (sign-off)
+    if (body.confirmarEtapa?.etapa) {
+      const etapa = body.confirmarEtapa.etapa as EtapaFlujo;
+      if (!FLOW_ETAPAS.includes(etapa)) {
+        return NextResponse.json({ error: 'Etapa inválida' }, { status: 400 });
+      }
+      if (!can(permForEtapa(etapa))) {
+        return NextResponse.json({ error: `Sin permiso para firmar ${etapa}` }, { status: 403 });
+      }
+      // Revalidar readiness desde la BD (no confiar en el cliente)
+      const [docsR, matsR, etpsR, confsR] = await Promise.all([
+        supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
+        supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
+        supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
+        supabase.from('proyecto_confirmaciones').select('etapa').eq('proyecto_id', id),
+      ]);
+      const ready = computeReadiness({
+        confirmaciones: confsR.data ?? [],
+        documentos: docsR.data ?? [],
+        materiales: matsR.data ?? [],
+        etapas: etpsR.data ?? [],
+      });
+      if (!ready[etapa]) {
+        return NextResponse.json(
+          { error: 'La etapa no está lista para confirmar', code: 'NOT_READY' },
+          { status: 409 }
+        );
+      }
+      await supabase.from('proyecto_confirmaciones').upsert(
+        { proyecto_id: id, etapa, confirmada_por: autor, confirmada_at: now },
+        { onConflict: 'proyecto_id,etapa' }
+      );
+    }
+
+    // Deshacer una etapa (y las posteriores, en cascada)
+    if (body.deshacerEtapa?.etapa) {
+      const etapa = body.deshacerEtapa.etapa as EtapaFlujo;
+      if (!FLOW_ETAPAS.includes(etapa)) {
+        return NextResponse.json({ error: 'Etapa inválida' }, { status: 400 });
+      }
+      if (!can(permForEtapa(etapa))) {
+        return NextResponse.json({ error: `Sin permiso para deshacer ${etapa}` }, { status: 403 });
+      }
+      await supabase
+        .from('proyecto_confirmaciones')
+        .delete()
+        .eq('proyecto_id', id)
+        .in('etapa', cascadeEtapas(etapa));
     }
 
     // Campos principales del proyecto
@@ -221,21 +283,13 @@ export async function PATCH(
       });
     }
 
-    // Estado automático: recalcular desde el avance real de las áreas y persistir.
-    // Planos = documentos (versiones); aprobado si alguno está "Aprobados y firmados".
-    const [docs, mats, etps, prod] = await Promise.all([
-      supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
-      supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
-      supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
-      supabase.from('proyecto_produccion').select('pruebas, envio').eq('proyecto_id', id).maybeSingle(),
-    ]);
-    const nuevoEstado = computeEstadoProyecto({
-      documentos: docs.data ?? [],
-      materiales: mats.data ?? [],
-      etapas: etps.data ?? [],
-      pruebas: prod.data?.pruebas,
-      envio: prod.data?.envio,
-    });
+    // Estado manual: se deriva de las firmas de etapa (no de los datos crudos).
+    const { data: confsAll } = await supabase
+      .from('proyecto_confirmaciones')
+      .select('etapa')
+      .eq('proyecto_id', id);
+    const confirmadasAll = new Set((confsAll ?? []).map((c) => c.etapa as EtapaFlujo));
+    const nuevoEstado = computeEstadoFromConfirmaciones(confirmadasAll);
     await supabase.from('proyectos').update({ estado: nuevoEstado, updated_at: now }).eq('id', id);
 
     return NextResponse.json({ success: true, estado: nuevoEstado });

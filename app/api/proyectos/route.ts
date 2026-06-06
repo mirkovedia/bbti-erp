@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { PERMS } from '@/lib/auth/permissions';
-import { aplicarRetraso } from '@/lib/utils/estado-proyecto';
+import { aplicarRetraso, computeEstadoFromConfirmaciones, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import type { Rol } from '@/types';
 import { NextResponse } from 'next/server';
 
@@ -13,7 +13,8 @@ export async function GET() {
       .select(`
         *,
         proyecto_comercial (fecha_entrega, dias_plazo, adelanto, adelanto_fijado, metrado, alerta),
-        proyecto_produccion (progreso)
+        proyecto_produccion (progreso),
+        proyecto_confirmaciones (etapa, confirmada_por, confirmada_at)
       `)
       .order('created_at', { ascending: false });
 
@@ -29,13 +30,18 @@ export async function GET() {
     const formatted = proyectos.map((p) => {
       const comercial = one(p.proyecto_comercial);
       const produccion = one(p.proyecto_produccion);
+      const confirmaciones = Array.isArray(p.proyecto_confirmaciones) ? p.proyecto_confirmaciones : [];
+      const confirmadas = new Set<EtapaFlujo>(confirmaciones.map((c: { etapa: string }) => c.etapa as EtapaFlujo));
+      const estadoBase = computeEstadoFromConfirmaciones(confirmadas);
       return {
         ...p,
-        estado: aplicarRetraso(p.estado, comercial?.fecha_entrega, hoy),
+        estado: aplicarRetraso(estadoBase, comercial?.fecha_entrega, hoy),
         comercial,
         produccion,
+        confirmaciones,
         proyecto_comercial: undefined,
         proyecto_produccion: undefined,
+        proyecto_confirmaciones: undefined,
       };
     });
 
