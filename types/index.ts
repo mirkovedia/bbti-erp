@@ -80,6 +80,15 @@ export interface Documento {
   created_at: string;
 }
 
+export type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
+
+export interface Confirmacion {
+  proyecto_id: string;
+  etapa: EtapaFlujo;
+  confirmada_por: string | null;
+  confirmada_at: string | null;
+}
+
 export interface Proyecto {
   id: string;
   cliente: string;
@@ -119,4 +128,5 @@ export interface Proyecto {
     pagos: Array<{ id: string; descripcion: string; monto: number; fecha: string }>;
   };
   documentos?: Documento[];
+  confirmaciones?: Confirmacion[];
 }
