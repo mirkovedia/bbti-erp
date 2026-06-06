@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Save, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { Proyecto, EstadoEtapa } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
@@ -35,16 +35,7 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
     ? Math.round((etapas.filter(e => e.estado === 'COMPLETADO').length / etapas.length) * 100)
     : produccion?.progreso || 0;
 
-  const [pruebas, setPruebas] = useState(produccion?.pruebas || false);
-  const [envio, setEnvio] = useState(produccion?.envio || false);
-  const [saving, setSaving] = useState(false);
   const [updatingEtapa, setUpdatingEtapa] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPruebas(produccion?.pruebas || false);
-    setEnvio(produccion?.envio || false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto.id]);
 
   const refetch = async () => {
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
@@ -54,28 +45,18 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
   const handleEtapaChange = async (etapaId: string, estado: EstadoEtapa) => {
     setUpdatingEtapa(etapaId);
     try {
+      const nuevasEtapas = etapas.map((e) => (e.id === etapaId ? { ...e, estado } : e));
+      const nuevoProgreso = nuevasEtapas.length > 0
+        ? Math.round((nuevasEtapas.filter((e) => e.estado === 'COMPLETADO').length / nuevasEtapas.length) * 100)
+        : 0;
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ etapas: [{ id: etapaId, estado }] }),
+        body: JSON.stringify({ etapas: [{ id: etapaId, estado }], produccion: { progreso: nuevoProgreso } }),
       });
       if (res.ok) await refetch();
     } finally {
       setUpdatingEtapa(null);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/proyectos/${proyecto.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ produccion: { progreso, pruebas, envio } }),
-      });
-      if (res.ok) await refetch();
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -121,41 +102,7 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
         </div>
       </div>
 
-      {/* Checkboxes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={pruebas}
-            onChange={(e) => setPruebas(e.target.checked)}
-            disabled={!canEdit}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
-          />
-          <span className="text-sm text-white">Pruebas completadas</span>
-        </label>
-
-        <label className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={envio}
-            onChange={(e) => setEnvio(e.target.checked)}
-            disabled={!canEdit}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
-          />
-          <span className="text-sm text-white">Listo para envío</span>
-        </label>
-      </div>
-
-      {canEdit && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? 'Guardando...' : 'Guardar'}
-        </button>
-      )}
+      {/* Pruebas y Envío se firman en el panel "Verificación del flujo" (arriba). */}
     </div>
   );
 };
