@@ -240,9 +240,10 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
           </label>
           <input
             type="number"
-            value={diasPlazo}
+            value={diasPlazo || ''}
             onChange={(e) => setDiasPlazo(Number(e.target.value))}
             disabled={!canEdit}
+            placeholder="0"
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
@@ -254,9 +255,10 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
           </label>
           <input
             type="number"
-            value={adelanto}
+            value={adelanto || ''}
             onChange={(e) => setAdelanto(Number(e.target.value))}
             disabled={!canEdit}
+            placeholder="0"
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
 

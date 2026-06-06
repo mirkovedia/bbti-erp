@@ -149,8 +149,9 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
                       <input
                         type="number"
                         min={0}
-                        value={m.comprado}
+                        value={m.comprado || ''}
                         onChange={(e) => updateComprado(m.id, Number(e.target.value))}
+                        placeholder="0"
                         className="w-20 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-center text-sm focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
