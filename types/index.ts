@@ -130,3 +130,16 @@ export interface Proyecto {
   documentos?: Documento[];
   confirmaciones?: Confirmacion[];
 }
+
+export type TipoNotificacion = 'documento' | 'confirmacion' | 'datos' | 'hito';
+
+export interface Notificacion {
+  id: string;
+  destinatario_id: string;
+  proyecto_id: string | null;
+  tipo: TipoNotificacion;
+  mensaje: string;
+  actor: string | null;
+  leida: boolean;
+  created_at: string;
+}
