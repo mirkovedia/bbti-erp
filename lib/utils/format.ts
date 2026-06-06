@@ -31,3 +31,18 @@ export const diasRestantes = (fechaEntrega: string | null | undefined): number |
   const diff = entrega.getTime() - hoy.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 };
+
+/**
+ * Tiempo relativo legible a partir de un ISO timestamp.
+ * Nota: usa Date.now() — solo para UI (no para lógica testeada).
+ */
+export const tiempoRelativo = (iso: string): string => {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'ayer' : `hace ${d} días`;
+};

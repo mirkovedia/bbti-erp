@@ -1,9 +1,10 @@
 'use client';
 
-import { LogOut, Bell } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/appStore';
 import { createClient } from '@/lib/supabase/client';
+import { NotificacionesBell } from '@/components/layout/NotificacionesBell';
 import { cn } from '@/lib/utils';
 
 const rolColors: Record<string, string> = {
@@ -42,10 +43,7 @@ export const Topbar = () => {
 
       <div className="flex items-center gap-4">
         {/* Notifications bell */}
-        <button className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificacionesBell />
 
         {/* User info */}
         {user && (
