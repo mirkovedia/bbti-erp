@@ -7,6 +7,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EstadoStepper } from '@/components/proyectos/EstadoStepper';
+import { FlujoVerificacion } from '@/components/proyectos/FlujoVerificacion';
 import { cn } from '@/lib/utils';
 
 // Skeleton mientras se carga el chunk de una pestaña
@@ -125,8 +126,11 @@ export default function ProyectoDetailPage() {
         </div>
       </div>
 
-      {/* Stepper del flujo (estado automático) */}
+      {/* Stepper del flujo (estado por firmas) */}
       <EstadoStepper proyecto={proyecto} />
+
+      {/* Verificador del flujo (firmas de etapa) */}
+      <FlujoVerificacion proyecto={proyecto} onUpdate={setProyecto} />
 
       {/* Tabs */}
       <div className="border-b border-slate-800">

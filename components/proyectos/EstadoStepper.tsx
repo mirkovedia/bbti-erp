@@ -3,7 +3,7 @@
 import { Fragment } from 'react';
 import { Check } from 'lucide-react';
 import type { Proyecto } from '@/types';
-import { computeFlow, activeStageIndex, FLOW_STAGES } from '@/lib/utils/estado-proyecto';
+import { FLOW_STAGES, FLOW_ETAPAS, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -12,15 +12,10 @@ interface Props {
 
 /** Barra de progreso del flujo: Ingeniería → Logística → Producción → Pruebas → Completado. */
 export const EstadoStepper = ({ proyecto }: Props) => {
-  const flow = computeFlow({
-    documentos: proyecto.documentos,
-    materiales: proyecto.logistica?.materiales,
-    etapas: proyecto.produccion?.etapas,
-    pruebas: proyecto.produccion?.pruebas,
-    envio: proyecto.produccion?.envio,
-  });
-  const done = [flow.ingenieria, flow.logistica, flow.produccion, flow.pruebas, flow.completado];
-  const active = activeStageIndex(flow);
+  const confirmadas = new Set((proyecto.confirmaciones ?? []).map((c) => c.etapa as EtapaFlujo));
+  const done = FLOW_ETAPAS.map((e) => confirmadas.has(e));
+  const firstPending = done.indexOf(false);
+  const active = firstPending === -1 ? FLOW_STAGES.length : firstPending;
 
   return (
     <div className="flex items-center w-full bg-[var(--navy2)] rounded-xl border border-slate-800 px-6 py-4">
