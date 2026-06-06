@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EstadoStepper } from '@/components/proyectos/EstadoStepper';

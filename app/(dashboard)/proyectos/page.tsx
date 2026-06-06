@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   SortingState,
 } from '@tanstack/react-table';
-import { Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, ArrowUpDown } from 'lucide-react';
 import { Proyecto, EstadoProyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';

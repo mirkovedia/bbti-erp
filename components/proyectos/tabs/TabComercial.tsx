@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2, Paperclip, Download, Trash2 } from 'lucide-react';
+import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2, Paperclip, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { WorkBook } from 'xlsx';
 import { Proyecto } from '@/types';

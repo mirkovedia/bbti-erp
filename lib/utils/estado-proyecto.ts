@@ -15,7 +15,6 @@ export interface EstadoInput {
 }
 
 export const FLOW_STAGES = ['Ingeniería', 'Logística', 'Producción', 'Pruebas', 'Completado'] as const;
-export type FlowStage = (typeof FLOW_STAGES)[number];
 
 // Planos aprobados: algún documento (versión) está en "Aprobados y firmados".
 const planosAprobados = (docs?: { estado?: string | null }[]): boolean =>
@@ -76,15 +75,6 @@ export const aplicarRetraso = (
   if (estado === 'COMPLETADO') return estado;
   if (!fechaEntrega || !hoy) return estado;
   return fechaEntrega < hoy ? 'RETRASADO' : estado;
-};
-
-/** Índice de la etapa activa (primera no terminada) para el stepper. 0..4 */
-export const activeStageIndex = (f: FlowProgress): number => {
-  if (f.completado) return 4; // Completado
-  if (f.produccion) return 3; // en Pruebas
-  if (f.logistica) return 2; // en Producción
-  if (f.ingenieria) return 1; // en Logística
-  return 0; // en Ingeniería
 };
 
 // ---------------------------------------------------------------------------
