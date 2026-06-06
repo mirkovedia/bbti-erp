@@ -53,8 +53,9 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop — sin backdrop-blur: el filtro sobre toda la pantalla congela la GPU
+          en algunos equipos/móviles. Mismo patrón que los demás modales de la app. */}
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-[var(--navy2)] border border-slate-700 rounded-xl w-full max-w-lg mx-4 p-6 shadow-2xl">
