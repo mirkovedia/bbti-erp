@@ -72,7 +72,11 @@ como variable CSS y usarla en el `body` de `globals.css` (reemplaza `'Inter'`).
 - **Login:** logo bbti en el panel de marca.
 - **Favicon:** `app/icon.png` generado a partir del ícono ámbar del logo (cuadrado).
 
-## Chrome: sidebar y topbar
+## Chrome (marco de la interfaz): sidebar y topbar
+
+> Nota: "chrome" aquí es el término de diseño para el **marco visual de la app** (sidebar + topbar),
+> NO el navegador Google Chrome. Todo el rebrand es CSS/HTML estándar y se ve igual en Chrome, Edge
+> y Firefox.
 
 - **Sidebar:** fondo petróleo `#255468`; ítem de menú activo en ámbar (sale del override de paletas);
   texto de items en `#e2e8f0`/blanco. Logo bbti+ERP en la cabecera.
@@ -118,9 +122,9 @@ error existentes.
 ## Verificación
 
 - `npm run build` limpio.
-- **Captura visual con Playwright** (reusa la infra de `scripts/extract-brand.mjs`/`repro-*`) del
-  login y del dashboard tras login: confirmar que petróleo/ámbar/Poppins/logo se ven bien y con
-  contraste suficiente (texto sobre petróleo, ámbar sobre oscuro).
+- **Captura visual multi-navegador con Playwright** del login y del dashboard tras login, en
+  **Chromium (Chrome/Edge) Y Firefox**: confirmar que petróleo/ámbar/Poppins/logo se ven bien, con
+  contraste suficiente (texto sobre petróleo, ámbar sobre oscuro) e idénticos en ambos motores.
 - `scripts/e2e-sweep.mjs` (8 páginas, 0 errores) → el reskin no rompe funcionalidad.
 - Deploy a producción y verificación con `Ctrl+Shift+R`.
 
