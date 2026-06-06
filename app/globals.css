@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Controles nativos (select/date) en modo oscuro: el popup del <select> usa
+     fondo oscuro automáticamente, haciendo legibles las opciones. */
+  color-scheme: dark;
   --navy: #060b18;
   --navy2: #0b1225;
   --navy3: #111827;

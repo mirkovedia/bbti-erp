@@ -23,6 +23,15 @@ const estadoColor = (estado: string | null): string => {
   return 'border-slate-600 text-slate-300 bg-slate-700/30';
 };
 
+// Color de cada opción del desplegable (legible sobre el fondo oscuro nativo)
+const optionColor = (estado: string): string => {
+  if (!estado) return '#94a3b8'; // slate-400
+  if (/aprobad/i.test(estado)) return '#4ade80'; // green-400
+  if (/enviad/i.test(estado)) return '#60a5fa'; // blue-400
+  if (/proceso/i.test(estado)) return '#fbbf24'; // amber-400
+  return '#cbd5e1'; // slate-300
+};
+
 export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   const { user } = useAppStore();
   const canEdit = can(user, 'canEditIngenieria');
@@ -170,9 +179,9 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
                       estadoColor(doc.estado)
                     )}
                   >
-                    <option value="">Sin estado</option>
+                    <option value="" style={{ color: optionColor(''), backgroundColor: '#0b1225' }}>Sin estado</option>
                     {ESTADOS_PLANO.map((e) => (
-                      <option key={e} value={e}>{e}</option>
+                      <option key={e} value={e} style={{ color: optionColor(e), backgroundColor: '#0b1225' }}>{e}</option>
                     ))}
                   </select>
                 ) : (
