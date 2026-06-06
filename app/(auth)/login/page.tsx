@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
-import { Zap, Shield, BarChart3, Clock, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,16 +20,11 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) {
         setError('Credenciales incorrectas. Verifica tu email y contraseña.');
         return;
       }
-
       router.push('/proyectos');
       router.refresh();
     } catch {
@@ -38,56 +34,32 @@ export default function LoginPage() {
     }
   };
 
-  const features = [
-    { icon: BarChart3, title: 'Gestión de Proyectos', desc: 'Control total de órdenes de producción' },
-    { icon: Shield, title: 'Roles y Permisos', desc: 'Acceso segmentado por área' },
-    { icon: Clock, title: 'Seguimiento en Tiempo Real', desc: 'Monitoreo de avance y entregas' },
-  ];
-
   return (
     <div className="min-h-screen flex bg-[var(--navy)]">
-      {/* Left side - branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 bg-gradient-to-br from-[var(--navy)] to-[var(--navy2)]">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-            <Zap className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-white">BBTI</h1>
-            <p className="text-sm text-slate-400">Sistema ERP</p>
-          </div>
+      {/* Panel de marca */}
+      <div className="hidden md:flex md:w-1/2 relative flex-col justify-between p-12 overflow-hidden">
+        {/* Fondo de marca (degradado petróleo) + overlay para legibilidad */}
+        <Image src="/login-bg.png" alt="" fill priority className="object-cover" />
+        <div className="absolute inset-0 bg-[var(--brand-teal)]/55" />
+        <div className="relative z-10">
+          <Image src="/bbti-logo.png" alt="BBTI" width={180} height={44} priority className="h-11 w-auto" />
         </div>
-
-        <h2 className="text-2xl font-semibold text-white mb-2">
-          Fabricación de Tableros Eléctricos
-        </h2>
-        <p className="text-slate-400 mb-10 text-lg">
-          Gestión integral de proyectos, producción y finanzas.
-        </p>
-
-        <div className="space-y-6">
-          {features.map((f) => (
-            <div key={f.title} className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center shrink-0">
-                <f.icon className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-white font-medium">{f.title}</h3>
-                <p className="text-slate-400 text-sm">{f.desc}</p>
-              </div>
-            </div>
-          ))}
+        <div className="relative z-10">
+          <h1 className="text-4xl font-bold text-white leading-tight">
+            Innovación en<br />cada proyecto
+          </h1>
+          <p className="mt-3 text-lg text-white/85">Sistema de Gestión de Proyectos</p>
+          <p className="mt-1 text-sm text-[var(--brand-amber)] font-medium">Diseño, fabricación y montaje a medida</p>
         </div>
+        <div className="relative z-10 text-xs text-white/70">BBTI S.A.C. — Tableros Eléctricos</div>
       </div>
 
-      {/* Right side - form */}
+      {/* Formulario */}
       <div className="flex-1 flex items-center justify-center px-8">
         <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-white">BBTI ERP</span>
+          {/* Logo en móvil */}
+          <div className="md:hidden flex justify-center mb-8">
+            <Image src="/bbti-logo.png" alt="BBTI" width={150} height={37} priority className="h-9 w-auto" />
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-2">Iniciar Sesión</h2>
@@ -102,13 +74,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                Correo electrónico
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Correo electrónico</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoFocus
                 className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 placeholder="tu@email.com"
                 required
@@ -116,9 +87,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                Contraseña
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Contraseña</label>
               <input
                 type="password"
                 value={password}
@@ -132,15 +101,13 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-[var(--brand-amber)] hover:brightness-110 text-[#1a1206] font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-slate-500">
-            BBTI S.A.C. — Sistema de Gestión v1.0
-          </p>
+          <p className="mt-8 text-center text-sm text-slate-500">BBTI S.A.C. — Sistema de Gestión v1.0</p>
         </div>
       </div>
     </div>

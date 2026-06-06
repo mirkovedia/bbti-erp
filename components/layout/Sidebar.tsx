@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   FolderKanban,
   Calendar,
@@ -12,7 +13,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Zap,
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { cn } from '@/lib/utils';
@@ -34,22 +34,31 @@ export const Sidebar = () => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen bg-[var(--navy)] border-r border-slate-800 flex flex-col z-40 transition-all duration-300',
+        'fixed left-0 top-0 h-screen bg-[var(--brand-teal)] border-r border-black/20 flex flex-col z-40 transition-all duration-300',
         sidebarCollapsed ? 'w-[68px]' : 'w-[248px]'
       )}
     >
       {/* Logo */}
-      <div className="h-[62px] flex items-center px-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
+      <div className="h-[62px] flex items-center px-4 border-b border-black/20">
+        {sidebarCollapsed ? (
+          <div className="w-9 h-9 rounded-lg bg-[var(--brand-amber)] flex items-center justify-center font-bold text-[#1a1206]">
+            b
           </div>
-          {!sidebarCollapsed && (
-            <span className="text-lg font-bold text-white tracking-tight">
-              BBTI <span className="text-cyan-400">ERP</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Image
+              src="/bbti-logo.png"
+              alt="BBTI"
+              width={96}
+              height={23}
+              priority
+              className="h-[22px] w-auto"
+            />
+            <span className="text-[10px] font-semibold tracking-wide text-[#1a1206] bg-[var(--brand-amber)] px-1.5 py-0.5 rounded">
+              ERP
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
@@ -64,8 +73,8 @@ export const Sidebar = () => {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 isActive
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  ? 'bg-[var(--brand-amber)] text-[#1a1206] font-semibold'
+                  : 'text-slate-200/80 hover:text-white hover:bg-black/20'
               )}
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -78,7 +87,7 @@ export const Sidebar = () => {
       {/* Collapse toggle */}
       <button
         onClick={toggleSidebar}
-        className="h-12 flex items-center justify-center border-t border-slate-800 text-slate-400 hover:text-white transition-colors"
+        className="h-12 flex items-center justify-center border-t border-black/20 text-slate-300 hover:text-white transition-colors"
       >
         {sidebarCollapsed ? (
           <ChevronRight className="w-5 h-5" />
