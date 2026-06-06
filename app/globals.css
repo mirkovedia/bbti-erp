@@ -65,3 +65,9 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Opciones de los <select> nativos: fondo oscuro + texto claro (legibles en el tema oscuro) */
+select option {
+  background-color: #0b1225; /* navy2 */
+  color: #e2e8f0; /* slate-200 */
+}
