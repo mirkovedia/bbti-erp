@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { PERMS } from '@/lib/auth/permissions';
 import { aplicarRetraso, computeEstadoFromConfirmaciones, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
+import { notificar } from '@/lib/notificaciones';
 import type { Rol } from '@/types';
 import { NextResponse } from 'next/server';
 
@@ -159,6 +160,15 @@ export async function POST(request: Request) {
       proyecto_id: id,
       adelanto: body.adelanto || 0,
       porcentaje: 0,
+    });
+
+    await notificar({
+      proyectoId: id,
+      tipo: 'hito',
+      mensaje: `Nuevo proyecto ${id} (${body.cliente}) creado. Inicien los planos.`,
+      rolesDestino: ['Ingeniería'],
+      actorId: user.id,
+      actorNombre: userData?.nombre,
     });
 
     return NextResponse.json(data, { status: 201 });

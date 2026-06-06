@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { notificar } from '@/lib/notificaciones';
 
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
@@ -71,6 +72,20 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Comprobante de adelanto → Finanzas; cualquier otro documento → Comercial.
+    const esComprobante = nombre.startsWith('Comprobante adelanto:');
+    await notificar({
+      proyectoId: proyecto_id,
+      tipo: 'documento',
+      mensaje: esComprobante
+        ? `${userData?.nombre ?? 'Comercial'} subió el comprobante de adelanto de ${proyecto_id}.`
+        : `${userData?.nombre ?? 'Alguien'} subió el documento "${nombre}" a ${proyecto_id}.`,
+      rolesDestino: esComprobante ? ['Finanzas'] : ['Comercial'],
+      actorId: user.id,
+      actorNombre: userData?.nombre,
+    });
+
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
     console.error('POST /api/documentos error:', err);

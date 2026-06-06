@@ -10,6 +10,7 @@ import {
   FLOW_ETAPAS,
   type EtapaFlujo,
 } from '@/lib/utils/estado-proyecto';
+import { notificar, rolesParaConfirmacion, mensajeConfirmacion, rolDelAreaDeEtapa } from '@/lib/notificaciones';
 import type { Permissions, Rol } from '@/types';
 
 export async function GET(
@@ -161,6 +162,14 @@ export async function PATCH(
         { proyecto_id: id, etapa, confirmada_por: autor, confirmada_at: now },
         { onConflict: 'proyecto_id,etapa' }
       );
+      await notificar({
+        proyectoId: id,
+        tipo: 'confirmacion',
+        mensaje: mensajeConfirmacion(etapa, id),
+        rolesDestino: rolesParaConfirmacion(etapa),
+        actorId: user.id,
+        actorNombre: autor,
+      });
     }
 
     // Deshacer una etapa (y las posteriores, en cascada)
@@ -177,6 +186,14 @@ export async function PATCH(
         .delete()
         .eq('proyecto_id', id)
         .in('etapa', cascadeEtapas(etapa));
+      await notificar({
+        proyectoId: id,
+        tipo: 'confirmacion',
+        mensaje: `Se revirtió la etapa "${etapa}" de ${id}.`,
+        rolesDestino: [rolDelAreaDeEtapa(etapa)],
+        actorId: user.id,
+        actorNombre: autor,
+      });
     }
 
     // Campos principales del proyecto
@@ -235,6 +252,18 @@ export async function PATCH(
       }
     }
 
+    // Metrado importado: si quien manda materiales es Comercial, avisa a Logística.
+    if (Array.isArray(body.materiales) && rol === 'Comercial') {
+      await notificar({
+        proyectoId: id,
+        tipo: 'datos',
+        mensaje: `Comercial importó el metrado de ${id}. Revisen las compras.`,
+        rolesDestino: ['Logística'],
+        actorId: user.id,
+        actorNombre: autor,
+      });
+    }
+
     // Estado de un documento (versión de plano)
     if (body.updateDocumento?.id) {
       await supabase
@@ -242,6 +271,17 @@ export async function PATCH(
         .update({ estado: body.updateDocumento.estado ?? null })
         .eq('id', body.updateDocumento.id)
         .eq('proyecto_id', id);
+      // Plano "Enviados a comercial" → avisa a Comercial para que revise.
+      if (typeof body.updateDocumento.estado === 'string' && /enviad/i.test(body.updateDocumento.estado)) {
+        await notificar({
+          proyectoId: id,
+          tipo: 'documento',
+          mensaje: `Ingeniería envió un plano de ${id} para revisión.`,
+          rolesDestino: ['Comercial'],
+          actorId: user.id,
+          actorNombre: autor,
+        });
+      }
     }
 
     // Etapas — actualización puntual de estado por id
