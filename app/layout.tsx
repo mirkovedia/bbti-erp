@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Poppins } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'BBTI ERP - Sistema de Gestión',
@@ -16,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className="dark">
-      <body className={inter.className}>
+      <body className={poppins.variable}>
         {children}
       </body>
     </html>

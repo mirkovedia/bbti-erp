@@ -4,14 +4,14 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Controles nativos (select/date) en modo oscuro: el popup del <select> usa
-     fondo oscuro automáticamente, haciendo legibles las opciones. */
   color-scheme: dark;
+  /* Base oscura (paneles) — se mantiene */
   --navy: #060b18;
   --navy2: #0b1225;
   --navy3: #111827;
-  --blue3: #2563eb;
-  --cyan: #06b6d4;
+  /* Marca BBTI */
+  --brand-amber: #ec9d2e;   /* acción / CTA */
+  --brand-teal: #255468;    /* chrome / petróleo */
   --gold: #f59e0b;
   --green: #10b981;
   --red: #f43f5e;
@@ -19,27 +19,57 @@
   --radius: 0.625rem;
 }
 
+/* === Override de paletas Tailwind v4 ===
+   La UI usa clases `blue-*` y `cyan-*` por todos lados. En vez de editar cada
+   componente, redefinimos esas dos escalas:
+     blue-*  -> rampa ÁMBAR (#ec9d2e)  = acción primaria de la marca
+     cyan-*  -> rampa TEAL  (#255468)  = secundario / petróleo
+   OJO: una clase `bg-blue-600` ahora pinta ÁMBAR; `text-cyan-400` pinta TEAL. */
 @theme inline {
+  --color-blue-50:  #fef6e7;
+  --color-blue-100: #fce6bf;
+  --color-blue-200: #f7cf85;
+  --color-blue-300: #f2b94f;
+  --color-blue-400: #eea93a;
+  --color-blue-500: #ec9d2e;
+  --color-blue-600: #d2841f;
+  --color-blue-700: #a9661a;
+  --color-blue-800: #855119;
+  --color-blue-900: #6d4318;
+  --color-blue-950: #3e2309;
+
+  --color-cyan-50:  #eef6f9;
+  --color-cyan-100: #d4e8ef;
+  --color-cyan-200: #a9d0de;
+  --color-cyan-300: #72b0c6;
+  --color-cyan-400: #4a8ea6;
+  --color-cyan-500: #3a7d9a;
+  --color-cyan-600: #336d87;
+  --color-cyan-700: #2e5e74;
+  --color-cyan-800: #255468;
+  --color-cyan-900: #21495a;
+  --color-cyan-950: #122a34;
+
   --color-background: var(--navy);
   --color-foreground: #f8fafc;
   --color-card: var(--navy2);
   --color-card-foreground: #f8fafc;
   --color-popover: var(--navy2);
   --color-popover-foreground: #f8fafc;
-  --color-primary: var(--blue3);
-  --color-primary-foreground: #ffffff;
+  --color-primary: var(--brand-amber);
+  --color-primary-foreground: #1a1206;
   --color-secondary: #1e293b;
   --color-secondary-foreground: #f8fafc;
   --color-muted: #1e293b;
   --color-muted-foreground: #94a3b8;
-  --color-accent: var(--cyan);
+  --color-accent: var(--brand-teal);
   --color-accent-foreground: #ffffff;
   --color-destructive: var(--red);
   --color-destructive-foreground: #ffffff;
   --color-border: #1e293b;
   --color-input: #1e293b;
-  --color-ring: var(--blue3);
-  --color-sidebar: var(--navy);
+  --color-ring: var(--brand-amber);
+  --color-sidebar: var(--brand-teal);
   --color-sidebar-foreground: #e2e8f0;
   --radius: 0.625rem;
 }
@@ -47,30 +77,14 @@
 body {
   background-color: var(--navy);
   color: #f8fafc;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-poppins), 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+/* Scrollbar (WebKit/Blink — Chrome/Edge; Firefox usa la suya, sin romper nada) */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--navy2); }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-::-webkit-scrollbar-track {
-  background: var(--navy2);
-}
-
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-/* Opciones de los <select> nativos: fondo oscuro + texto claro (legibles en el tema oscuro) */
-select option {
-  background-color: #0b1225; /* navy2 */
-  color: #e2e8f0; /* slate-200 */
-}
+/* Opciones de los <select> nativos: fondo oscuro + texto claro */
+select option { background-color: #0b1225; color: #e2e8f0; }
