@@ -11,6 +11,10 @@ interface Props {
   onCreated: () => void;
 }
 
+// Referencias estables (buena práctica de react-hook-form: no recrear en cada render).
+const proyectoResolver = zodResolver(createProyectoSchema);
+const proyectoDefaults: Partial<CreateProyectoInput> = { monto: 0 };
+
 export const ProyectoModal = ({ onClose, onCreated }: Props) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -20,10 +24,8 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
     handleSubmit,
     formState: { errors },
   } = useForm<CreateProyectoInput>({
-    resolver: zodResolver(createProyectoSchema),
-    defaultValues: {
-      monto: 0,
-    },
+    resolver: proyectoResolver,
+    defaultValues: proyectoDefaults,
   });
 
   const onSubmit = async (data: CreateProyectoInput) => {
@@ -53,8 +55,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop — sin backdrop-blur: el filtro sobre toda la pantalla congela la GPU
-          en algunos equipos/móviles. Mismo patrón que los demás modales de la app. */}
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
@@ -119,7 +120,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Dias de Plazo</label>
               <input
                 type="number"
-                {...register('dias_plazo', { valueAsNumber: true })}
+                {...register('dias_plazo', { setValueAs: (v) => (v === '' || v === null ? undefined : Number(v)) })}
                 className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="30"
               />
@@ -131,7 +132,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
             <input
               type="number"
               step="0.01"
-              {...register('adelanto', { valueAsNumber: true })}
+              {...register('adelanto', { setValueAs: (v) => (v === '' || v === null ? undefined : Number(v)) })}
               className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="0.00"
             />

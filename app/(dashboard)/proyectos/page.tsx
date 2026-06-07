@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useReactTable,
@@ -48,7 +48,7 @@ export default function ProyectosPage() {
     fetchProyectos();
   }, []);
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor('id', {
       header: 'ID',
       cell: (info) => (
@@ -86,15 +86,16 @@ export default function ProyectosPage() {
         return <ProgressBar value={prog} className="w-24" />;
       },
     }),
-  ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
 
-  const filteredData = proyectos.filter((p) => {
+  const filteredData = useMemo(() => proyectos.filter((p) => {
     const matchesSearch =
       p.cliente.toLowerCase().includes(search.toLowerCase()) ||
       p.id.toLowerCase().includes(search.toLowerCase());
     const matchesEstado = !estadoFilter || p.estado === estadoFilter;
     return matchesSearch && matchesEstado;
-  });
+  }), [proyectos, search, estadoFilter]);
 
   const table = useReactTable({
     data: filteredData,

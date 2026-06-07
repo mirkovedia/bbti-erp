@@ -23,17 +23,9 @@ export default function DashboardError({ error, reset }: Props) {
         <AlertTriangle className="w-7 h-7 text-red-400" />
       </div>
       <h2 className="text-xl font-bold text-white mb-1">Algo salió mal</h2>
-      <p className="text-slate-400 max-w-md mb-4">
+      <p className="text-slate-400 max-w-md mb-6">
         Ocurrió un problema al mostrar esta sección. Puedes reintentar; si persiste, recarga la página.
       </p>
-
-      {/* Detalle técnico (temporal, para diagnóstico): mostrar el error en pantalla
-          para poder capturarlo sin abrir la consola del navegador. */}
-      <pre className="max-w-lg w-full mb-6 p-3 text-left text-xs text-amber-300 bg-black/40 border border-slate-700 rounded-lg overflow-auto whitespace-pre-wrap">
-        {error?.name}: {error?.message}
-        {error?.digest ? `\ndigest: ${error.digest}` : ''}
-        {error?.stack ? `\n\n${error.stack.split('\n').slice(0, 4).join('\n')}` : ''}
-      </pre>
       <div className="flex gap-3">
         <button
           onClick={() => reset()}
