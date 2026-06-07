@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, Download, Search, File, FileSpreadsheet } from 'lucide-react';
 import type { Documento, Rol } from '@/types';
 import { RoleBadge } from '@/components/shared/RoleBadge';
+import { fechaHora } from '@/lib/utils/format';
 
 // La lista global añade el nombre del cliente (join con proyectos)
 interface DocumentoConCliente extends Documento {
@@ -129,7 +130,7 @@ export default function DocumentosPage() {
                   </div>
                 </div>
                 <span className="text-xs text-slate-500 shrink-0">
-                  {doc.created_at ? new Date(doc.created_at).toLocaleDateString('es-PE') : '—'}
+                  {fechaHora(doc.created_at)}
                 </span>
                 <button
                   onClick={() => handleDownload(doc)}

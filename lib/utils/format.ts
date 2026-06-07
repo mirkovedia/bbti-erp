@@ -46,3 +46,13 @@ export const tiempoRelativo = (iso: string): string => {
   const d = Math.floor(h / 24);
   return d === 1 ? 'ayer' : `hace ${d} días`;
 };
+
+/**
+ * Fecha + hora exacta (es-PE), ej. "07/06/2026 14:30".
+ */
+export const fechaHora = (iso: string | null | undefined): string => {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('es-PE', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+};

@@ -6,6 +6,7 @@ import { Proyecto, Documento, Rol } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { RoleBadge } from '@/components/shared/RoleBadge';
+import { fechaHora } from '@/lib/utils/format';
 import { createClient } from '@/lib/supabase/client';
 import { DOCUMENTOS_BUCKET, MAX_FILE_SIZE, ESTADOS_PLANO } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -166,7 +167,7 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
                   <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
                     <span>{doc.subido_por ?? '—'}</span>
                     {doc.subido_por_rol && <RoleBadge rol={doc.subido_por_rol as Rol} />}
-                    {doc.created_at && <span>· {new Date(doc.created_at).toLocaleDateString('es-PE')}</span>}
+                    {doc.created_at && <span>· {fechaHora(doc.created_at)}</span>}
                   </div>
                 </div>
 
