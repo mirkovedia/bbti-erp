@@ -27,6 +27,7 @@ export async function GET(request: Request) {
       tipo: d.tipo,
       storage_path: d.storage_path,
       subido_por: d.subido_por,
+      subido_por_rol: d.subido_por_rol,
       created_at: d.created_at,
     }));
     return NextResponse.json(docs);
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     const { data: userData } = await supabase
-      .from('users').select('nombre').eq('id', user.id).single();
+      .from('users').select('nombre, rol').eq('id', user.id).single();
 
     const { data, error } = await supabase
       .from('proyecto_documentos')
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
         tipo: tipo ?? null,
         storage_path,
         subido_por: userData?.nombre ?? 'Sistema',
+        subido_por_rol: userData?.rol ?? null,
       })
       .select()
       .single();

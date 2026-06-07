@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react';
 import { AlertCircle, Upload, Download, Trash2, File, Loader2 } from 'lucide-react';
-import { Proyecto, Documento } from '@/types';
+import { Proyecto, Documento, Rol } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
+import { RoleBadge } from '@/components/shared/RoleBadge';
 import { createClient } from '@/lib/supabase/client';
 import { DOCUMENTOS_BUCKET, MAX_FILE_SIZE, ESTADOS_PLANO } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -162,10 +163,11 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
                 <File className="w-5 h-5 text-slate-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate">{doc.nombre}</p>
-                  <p className="text-xs text-slate-500">
-                    {doc.subido_por ?? '—'}
-                    {doc.created_at ? ` · ${new Date(doc.created_at).toLocaleDateString('es-PE')}` : ''}
-                  </p>
+                  <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span>{doc.subido_por ?? '—'}</span>
+                    {doc.subido_por_rol && <RoleBadge rol={doc.subido_por_rol as Rol} />}
+                    {doc.created_at && <span>· {new Date(doc.created_at).toLocaleDateString('es-PE')}</span>}
+                  </div>
                 </div>
 
                 {/* Estado del documento (versión) */}

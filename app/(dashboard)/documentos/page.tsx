@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Download, Search, File, FileSpreadsheet } from 'lucide-react';
-import type { Documento } from '@/types';
+import type { Documento, Rol } from '@/types';
+import { RoleBadge } from '@/components/shared/RoleBadge';
 
 // La lista global añade el nombre del cliente (join con proyectos)
 interface DocumentoConCliente extends Documento {
@@ -124,6 +125,7 @@ export default function DocumentosPage() {
                     <span>·</span>
                     <span>{doc.cliente}</span>
                     {doc.subido_por && <><span>·</span><span>{doc.subido_por}</span></>}
+                    {doc.subido_por_rol && <RoleBadge rol={doc.subido_por_rol as Rol} />}
                   </div>
                 </div>
                 <span className="text-xs text-slate-500 shrink-0">
