@@ -15,25 +15,25 @@ export const PERMS: Record<Rol, Permissions> = {
   },
   Comercial: {
     canCreate: true, canEdit: true, canDelete: false, canManageUsers: false,
-    canConfig: false, canViewReports: true, canViewFinance: false, canEditFinance: false,
+    canConfig: false, canViewReports: true, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: false, canEditIngenieria: false,
     canEditComercial: true, canExport: true,
   },
   Ingeniería: {
     canCreate: false, canEdit: false, canDelete: false, canManageUsers: false,
-    canConfig: false, canViewReports: false, canViewFinance: false, canEditFinance: false,
+    canConfig: false, canViewReports: false, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: false, canEditIngenieria: true,
     canEditComercial: false, canExport: true,
   },
   Logística: {
     canCreate: false, canEdit: false, canDelete: false, canManageUsers: false,
-    canConfig: false, canViewReports: false, canViewFinance: false, canEditFinance: false,
+    canConfig: false, canViewReports: false, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: true, canEditIngenieria: false,
     canEditComercial: false, canExport: true,
   },
   Producción: {
     canCreate: false, canEdit: false, canDelete: false, canManageUsers: false,
-    canConfig: false, canViewReports: false, canViewFinance: false, canEditFinance: false,
+    canConfig: false, canViewReports: false, canViewFinance: true, canEditFinance: false,
     canEditProduccion: true, canEditLogistica: false, canEditIngenieria: false,
     canEditComercial: false, canExport: false,
   },
@@ -45,7 +45,7 @@ export const PERMS: Record<Rol, Permissions> = {
   },
   'Solo Lectura': {
     canCreate: false, canEdit: false, canDelete: false, canManageUsers: false,
-    canConfig: false, canViewReports: false, canViewFinance: false, canEditFinance: false,
+    canConfig: false, canViewReports: false, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: false, canEditIngenieria: false,
     canEditComercial: false, canExport: false,
   },

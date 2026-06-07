@@ -70,6 +70,16 @@ export default function UsuariosPage() {
     }
   };
 
+  // Acceso restringido: gestionar usuarios es función de sistema, solo Admin.
+  if (user && !puedeGestionar) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-amber-400 font-medium mb-1">Acceso restringido</p>
+        <p className="text-slate-400">Solo el Administrador puede gestionar usuarios.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

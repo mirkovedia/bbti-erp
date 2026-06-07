@@ -15,21 +15,26 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { can } from '@/lib/auth/permissions';
+import type { Permissions } from '@/types';
 import { cn } from '@/lib/utils';
 
-const navItems = [
+// `perm`: si está presente, el item solo se muestra a quien tenga ese permiso
+// (Usuarios y Configuración = funciones de sistema, solo Admin).
+const navItems: { href: string; label: string; icon: typeof FolderKanban; perm?: keyof Permissions }[] = [
   { href: '/proyectos', label: 'Proyectos', icon: FolderKanban },
   { href: '/calendario', label: 'Calendario', icon: Calendar },
   { href: '/reportes', label: 'Reportes', icon: BarChart3 },
   { href: '/alertas', label: 'Alertas', icon: Bell },
   { href: '/documentos', label: 'Documentos', icon: FileText },
-  { href: '/usuarios', label: 'Usuarios', icon: Users },
-  { href: '/configuracion', label: 'Configuración', icon: Settings },
+  { href: '/usuarios', label: 'Usuarios', icon: Users, perm: 'canManageUsers' },
+  { href: '/configuracion', label: 'Configuración', icon: Settings, perm: 'canConfig' },
 ];
 
 export const Sidebar = () => {
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const { sidebarCollapsed, toggleSidebar, user } = useAppStore();
+  const visibleItems = navItems.filter((item) => !item.perm || can(user, item.perm));
 
   return (
     <aside
@@ -63,7 +68,7 @@ export const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;
           return (
