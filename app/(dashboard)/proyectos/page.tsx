@@ -161,14 +161,14 @@ export default function ProyectosPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: proyectos.length, color: 'from-blue-600 to-blue-400' },
-          { label: 'En Produccion', value: proyectos.filter(p => p.estado === 'EN PRODUCCIÓN').length, color: 'from-cyan-600 to-cyan-400' },
-          { label: 'Retrasados', value: proyectos.filter(p => p.estado === 'RETRASADO').length, color: 'from-red-600 to-red-400' },
-          { label: 'Completados', value: proyectos.filter(p => p.estado === 'COMPLETADO').length, color: 'from-green-600 to-green-400' },
+          { label: 'Total', value: proyectos.length, color: 'text-blue-400' },
+          { label: 'En Produccion', value: proyectos.filter(p => p.estado === 'EN PRODUCCIÓN').length, color: 'text-cyan-400' },
+          { label: 'Retrasados', value: proyectos.filter(p => p.estado === 'RETRASADO').length, color: 'text-red-400' },
+          { label: 'Completados', value: proyectos.filter(p => p.estado === 'COMPLETADO').length, color: 'text-green-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-4">
             <p className="text-sm text-slate-400">{stat.label}</p>
-            <p className={cn('text-3xl font-bold mt-1 bg-gradient-to-r bg-clip-text text-transparent', stat.color)}>
+            <p className={cn('text-3xl font-bold mt-1', stat.color)}>
               {stat.value}
             </p>
           </div>

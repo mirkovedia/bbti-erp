@@ -80,10 +80,10 @@ export default function ReportesPage() {
     .sort((a, b) => (a.dias ?? 0) - (b.dias ?? 0));
 
   const kpis = [
-    { label: 'Total Órdenes', value: String(total), icon: BarChart3, color: 'from-blue-600 to-blue-400' },
-    { label: 'Monto Total', value: fm(montoTotal), icon: DollarSign, color: 'from-cyan-600 to-cyan-400' },
-    { label: 'Retrasadas', value: String(retrasados), icon: AlertTriangle, color: 'from-red-600 to-red-400' },
-    { label: 'Tasa Completado', value: `${tasaCompletado}%`, icon: CheckCircle2, color: 'from-green-600 to-green-400' },
+    { label: 'Total Órdenes', value: String(total), icon: BarChart3, color: 'text-blue-400' },
+    { label: 'Monto Total', value: fm(montoTotal), icon: DollarSign, color: 'text-cyan-400' },
+    { label: 'Retrasadas', value: String(retrasados), icon: AlertTriangle, color: 'text-red-400' },
+    { label: 'Tasa Completado', value: `${tasaCompletado}%`, icon: CheckCircle2, color: 'text-green-400' },
   ];
 
   const handleExportExcel = () => {
@@ -154,7 +154,7 @@ export default function ReportesPage() {
                 <p className="text-sm text-slate-400">{kpi.label}</p>
                 <Icon className="w-4 h-4 text-slate-500" />
               </div>
-              <p className={`text-2xl font-bold mt-2 bg-gradient-to-r bg-clip-text text-transparent ${kpi.color}`}>
+              <p className={`text-2xl font-bold mt-2 ${kpi.color}`}>
                 {kpi.value}
               </p>
             </div>
