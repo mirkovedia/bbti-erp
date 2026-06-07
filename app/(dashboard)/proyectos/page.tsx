@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   SortingState,
 } from '@tanstack/react-table';
-import { Plus, Search, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, ArrowUpDown, Trash2 } from 'lucide-react';
 import { Proyecto, EstadoProyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
@@ -47,6 +47,23 @@ export default function ProyectosPage() {
   useEffect(() => {
     fetchProyectos();
   }, []);
+
+  const isAdmin = can(user, 'canDelete');
+
+  const handleDelete = async (id: string, cliente: string) => {
+    if (!confirm(`¿Eliminar el proyecto ${id} (${cliente})? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch(`/api/proyectos/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProyectos((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'No se pudo eliminar el proyecto');
+      }
+    } catch {
+      alert('Error de conexión al eliminar.');
+    }
+  };
 
   const columns = useMemo(() => [
     columnHelper.accessor('id', {
@@ -205,6 +222,9 @@ export default function ProyectosPage() {
                         </div>
                       </th>
                     ))}
+                    {isAdmin && (
+                      <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Acc.</th>
+                    )}
                   </tr>
                 ))}
               </thead>
@@ -220,6 +240,17 @@ export default function ProyectosPage() {
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
+                    {isAdmin && (
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleDelete(row.original.id, row.original.cliente)}
+                          title="Eliminar proyecto"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
