@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { notificar } from '@/lib/notificaciones';
+import { logDocumentoEvento } from '@/lib/documento-eventos';
 
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
@@ -74,6 +75,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await logDocumentoEvento({
+      documentoId: data.id,
+      proyectoId: proyecto_id,
+      documentoNombre: nombre,
+      tipo: 'subida',
+      usuario: userData?.nombre,
+      rol: userData?.rol,
+    });
 
     // Comprobante de adelanto → Finanzas; cualquier otro documento → Comercial.
     const esComprobante = nombre.startsWith('Comprobante adelanto:');

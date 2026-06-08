@@ -81,6 +81,19 @@ export interface Documento {
   created_at: string;
 }
 
+export type TipoEventoDoc = 'subida' | 'descarga' | 'eliminacion';
+
+export interface DocumentoEvento {
+  id: string;
+  documento_id: string | null;
+  proyecto_id: string | null;
+  documento_nombre: string;
+  tipo: TipoEventoDoc;
+  usuario: string | null;
+  rol: string | null;
+  created_at: string;
+}
+
 export type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
 
 export interface Confirmacion {
