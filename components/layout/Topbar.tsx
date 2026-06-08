@@ -20,11 +20,14 @@ const rolColors: Record<string, string> = {
 
 export const Topbar = () => {
   const router = useRouter();
-  const { user, sidebarCollapsed } = useAppStore();
+  const { user, setUser, sidebarCollapsed } = useAppStore();
 
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Limpiamos el usuario del store: si no, al entrar con otra cuenta el layout
+    // no recarga los datos y se queda mostrando el nombre del usuario anterior.
+    setUser(null);
     router.push('/login');
   };
 

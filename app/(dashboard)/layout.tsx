@@ -22,10 +22,15 @@ export default function DashboardLayout({
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
       if (!authUser) {
+        setUser(null);
         router.push('/login');
         return;
       }
 
+      // Si ya tenemos en memoria al usuario correcto, no recargamos.
+      if (user && user.id === authUser.id) return;
+
+      // Usuario distinto (o primer login): cargamos sus datos frescos.
       const { data: userData } = await supabase
         .from('users')
         .select('*')
@@ -37,9 +42,7 @@ export default function DashboardLayout({
       }
     };
 
-    if (!user) {
-      loadUser();
-    }
+    loadUser();
   }, [user, setUser, router]);
 
   // Mientras se carga la sesión, mostrar un loader a pantalla completa

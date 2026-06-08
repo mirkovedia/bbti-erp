@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X } from 'lucide-react';
 import { createProyectoSchema, CreateProyectoInput } from '@/lib/validations/proyecto.schema';
+import { today } from '@/lib/utils/format';
 
 interface Props {
   onClose: () => void;
@@ -22,11 +23,21 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateProyectoInput>({
     resolver: proyectoResolver,
     defaultValues: proyectoDefaults,
   });
+
+  // Los días de plazo se calculan automáticamente desde la fecha de entrega.
+  const fechaEntrega = watch('fecha_entrega');
+  useEffect(() => {
+    if (!fechaEntrega) return;
+    const dias = Math.ceil((new Date(fechaEntrega).getTime() - new Date(today()).getTime()) / 86400000);
+    setValue('dias_plazo', dias > 0 ? dias : 0);
+  }, [fechaEntrega, setValue]);
 
   const onSubmit = async (data: CreateProyectoInput) => {
     setSubmitting(true);
@@ -117,12 +128,14 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Dias de Plazo</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Días de Plazo <span className="text-slate-500">(automático)</span></label>
               <input
                 type="number"
+                readOnly
                 {...register('dias_plazo', { setValueAs: (v) => (v === '' || v === null ? undefined : Number(v)) })}
-                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="30"
+                className="w-full px-3 py-2 bg-slate-800/30 border border-slate-700 rounded-lg text-slate-300 cursor-not-allowed focus:outline-none"
+                placeholder="Elige una fecha"
+                title="Se calcula automáticamente a partir de la fecha de entrega"
               />
             </div>
           </div>

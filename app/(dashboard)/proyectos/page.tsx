@@ -18,6 +18,7 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { useAppStore } from '@/store/appStore';
 import { useDebounce } from '@/hooks/useDebounce';
 import { can } from '@/lib/auth/permissions';
+import { fm } from '@/lib/utils/format';
 import { ProyectoModal } from '@/components/proyectos/ProyectoModal';
 import { cn } from '@/lib/utils';
 
@@ -49,10 +50,10 @@ export default function ProyectosPage() {
     fetchProyectos();
   }, []);
 
-  const isAdmin = can(user, 'canDelete');
+  const puedeEliminar = can(user, 'canDelete');
 
   const handleDelete = async (id: string, cliente: string) => {
-    if (!confirm(`¿Eliminar el proyecto ${id} (${cliente})? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Estás seguro que deseas eliminar la PR ${id} (${cliente})?\nEsta acción no se puede deshacer.`)) return;
     try {
       const res = await fetch(`/api/proyectos/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -84,7 +85,7 @@ export default function ProyectosPage() {
     columnHelper.accessor('monto', {
       header: 'Monto',
       cell: (info) => (
-        <span className="text-slate-300">S/ {info.getValue().toLocaleString()}</span>
+        <span className="text-slate-300">{fm(info.getValue())}</span>
       ),
     }),
     columnHelper.accessor('fecha_creacion', {
@@ -225,7 +226,7 @@ export default function ProyectosPage() {
                         </div>
                       </th>
                     ))}
-                    {isAdmin && (
+                    {puedeEliminar && (
                       <th className="text-center py-3 px-4 text-xs font-medium text-slate-400 uppercase">Acc.</th>
                     )}
                   </tr>
@@ -243,7 +244,7 @@ export default function ProyectosPage() {
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
-                    {isAdmin && (
+                    {puedeEliminar && (
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleDelete(row.original.id, row.original.cliente)}

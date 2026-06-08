@@ -7,8 +7,8 @@ import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { RoleBadge } from '@/components/shared/RoleBadge';
 import { fechaHora } from '@/lib/utils/format';
-import { createClient } from '@/lib/supabase/client';
-import { DOCUMENTOS_BUCKET, MAX_FILE_SIZE, ESTADOS_PLANO } from '@/lib/constants';
+import { DOC_PREFIX, ESTADOS_PLANO } from '@/lib/constants';
+import { subirDocumento } from '@/lib/utils/upload-documento';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -64,48 +64,35 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   };
 
   // ---- Documentos (versiones de planos, cada uno con su estado) ----
-  const documentos: Documento[] = proyecto.documentos || [];
+  // Ingeniería ve sus planos; los adjuntos de Comercial (OC, Especificaciones,
+  // Comprobante) viven en la pestaña Comercial, así que se filtran de esta lista.
+  const allDocs: Documento[] = proyecto.documentos || [];
+  const esComercialDoc = (n: string) =>
+    n.startsWith(DOC_PREFIX.oc) || n.startsWith(DOC_PREFIX.especificaciones) || n.startsWith(DOC_PREFIX.comprobante);
+  const documentos = allDocs.filter(
+    (d) => !esComercialDoc(d.nombre || '') && !(d.nombre || '').startsWith(DOC_PREFIX.despiece)
+  );
+  const despiece = allDocs.filter((d) => (d.nombre || '').startsWith(DOC_PREFIX.despiece));
   const canDelete = user?.rol === 'Administrador';
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const despieceInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingEstado, setSavingEstado] = useState<string | null>(null);
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, prefix = '') => {
     setUploadError('');
-    if (file.size > MAX_FILE_SIZE) {
-      setUploadError('El archivo supera el límite de 25MB.');
-      return;
-    }
     setUploading(true);
     try {
-      const urlRes = await fetch('/api/documentos/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proyecto_id: proyecto.id, filename: file.name }),
-      });
-      if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
-      const { path, token } = await urlRes.json();
-
-      const supabase = createClient();
-      const { error: upErr } = await supabase.storage.from(DOCUMENTOS_BUCKET).uploadToSignedUrl(path, token, file);
-      if (upErr) throw new Error(upErr.message);
-
-      const tipo = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : null;
-      const metaRes = await fetch('/api/documentos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proyecto_id: proyecto.id, nombre: file.name, tipo, storage_path: path }),
-      });
-      if (!metaRes.ok) throw new Error('No se pudo registrar el documento');
-
+      await subirDocumento(proyecto.id, file, prefix);
       await refetch();
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : 'Error al subir');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (despieceInputRef.current) despieceInputRef.current.value = '';
     }
   };
 
@@ -232,6 +219,72 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
           {uploading ? 'Subiendo...' : 'Subir plano / documento'}
         </button>
         {uploadError && <p className="text-sm text-red-400 mt-2">{uploadError}</p>}
+      </div>
+
+      {/* Planos de despiece */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <File className="w-5 h-5 text-amber-400" />
+            Planos de despiece ({despiece.length})
+          </h3>
+        </div>
+
+        <div className="space-y-2 mb-4">
+          {despiece.length ? (
+            despiece.map((doc) => (
+              <div key={doc.id} className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <File className="w-5 h-5 text-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{(doc.nombre || '').replace(DOC_PREFIX.despiece, '')}</p>
+                  <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span>{doc.subido_por ?? '—'}</span>
+                    {doc.subido_por_rol && <RoleBadge rol={doc.subido_por_rol as Rol} />}
+                    {doc.created_at && <span>· {fechaHora(doc.created_at)}</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDownload(doc)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  title="Descargar"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                {canDelete && (
+                  <button
+                    onClick={() => handleDeleteDoc(doc.id)}
+                    disabled={deletingId === doc.id}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">No hay planos de despiece subidos.</p>
+          )}
+        </div>
+
+        {canEdit && (
+          <>
+            <input
+              ref={despieceInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f, DOC_PREFIX.despiece); }}
+            />
+            <button
+              onClick={() => despieceInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              Subir plano de despiece
+            </button>
+          </>
+        )}
       </div>
 
       {/* Observaciones */}

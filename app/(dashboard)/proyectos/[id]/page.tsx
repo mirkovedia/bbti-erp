@@ -8,6 +8,7 @@ import { Proyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EstadoStepper } from '@/components/proyectos/EstadoStepper';
 import { FlujoVerificacion } from '@/components/proyectos/FlujoVerificacion';
+import { fm } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 
 // Skeleton mientras se carga el chunk de una pestaña
@@ -120,7 +121,7 @@ export default function ProyectoDetailPage() {
               <StatusBadge estado={proyecto.estado} />
             </div>
             <p className="text-slate-400 mt-1">
-              {proyecto.cliente} • Creado: {proyecto.fecha_creacion} • Monto: S/ {proyecto.monto.toLocaleString()}
+              {proyecto.cliente} • Creado: {proyecto.fecha_creacion} • Monto: {fm(proyecto.monto)}
             </p>
           </div>
         </div>

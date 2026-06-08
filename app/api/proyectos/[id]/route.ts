@@ -102,7 +102,6 @@ export async function PATCH(
       [body.cliente !== undefined || body.monto !== undefined || body.estado !== undefined, 'canEdit'],
       [body.comercial !== undefined || body.addComentario !== undefined, 'canEditComercial'],
       [body.ingenieria !== undefined || body.addObservacion !== undefined || body.updateDocumento !== undefined, 'canEditIngenieria'],
-      [body.materiales !== undefined, 'canEditLogistica'],
       [body.produccion !== undefined || body.etapas !== undefined, 'canEditProduccion'],
       [body.finanzas !== undefined || body.addPago !== undefined, 'canEditFinance'],
     ];
@@ -113,6 +112,15 @@ export async function PATCH(
           { status: 403 }
         );
       }
+    }
+
+    // Materiales: Logística los gestiona, pero Comercial también puede escribirlos
+    // al importar el metrado (el metrado define la lista inicial de materiales).
+    if (body.materiales !== undefined && !can('canEditLogistica') && !can('canEditComercial')) {
+      return NextResponse.json(
+        { error: 'Sin permiso para modificar materiales' },
+        { status: 403 }
+      );
     }
 
     // Confirmar una etapa del flujo (sign-off)
@@ -339,22 +347,37 @@ export async function DELETE(
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    // Verify admin role
+    // Solo roles con permiso de borrado (Administrador, Comercial, Ingeniería)
     const { data: userData } = await supabase
       .from('users')
-      .select('rol')
+      .select('nombre, rol')
       .eq('id', user.id)
       .single();
 
-    if (userData?.rol !== 'Administrador') {
-      return NextResponse.json({ error: 'Solo administradores pueden eliminar proyectos' }, { status: 403 });
+    const rol = userData?.rol as Rol | undefined;
+    if (!rol || !PERMS[rol]?.canDelete) {
+      return NextResponse.json({ error: 'Sin permiso para eliminar proyectos' }, { status: 403 });
     }
+
+    // Capturamos el cliente antes de borrar (para el mensaje de la notificación)
+    const { data: proy } = await supabase
+      .from('proyectos').select('cliente').eq('id', id).maybeSingle();
 
     const { error } = await supabase.from('proyectos').delete().eq('id', id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Avisar a Administración y Gerencia que se eliminó una PR (trazabilidad)
+    await notificar({
+      proyectoId: id,
+      tipo: 'hito',
+      mensaje: `${userData?.nombre ?? 'Alguien'} (${rol}) eliminó la PR ${id}${proy?.cliente ? ` — ${proy.cliente}` : ''}.`,
+      rolesDestino: ['Administrador', 'Gerencia General'],
+      actorId: user.id,
+      actorNombre: userData?.nombre,
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

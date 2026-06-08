@@ -1,8 +1,14 @@
 /**
- * Formatea un monto en soles peruanos.
+ * Formatea un número con separador de miles (coma): 15000 -> "15,000.00".
+ * Usa 'en-US' para garantizar la coma como separador de miles.
  */
-export const fm = (value: number, moneda = 'S/'): string =>
-  `${moneda} ${value.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const nf = (value: number): string =>
+  (value ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Formatea un monto en soles con separador de miles: "S/ 15,000.00".
+ */
+export const fm = (value: number, moneda = 'S/'): string => `${moneda} ${nf(value)}`;
 
 /**
  * Fecha de hoy en formato ISO (YYYY-MM-DD).

@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { notificar } from '@/lib/notificaciones';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
+import { DOC_PREFIX } from '@/lib/constants';
+import type { Rol } from '@/types';
 
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
@@ -85,15 +87,18 @@ export async function POST(request: Request) {
       rol: userData?.rol,
     });
 
-    // Comprobante de adelanto → Finanzas; cualquier otro documento → Comercial.
-    const esComprobante = nombre.startsWith('Comprobante adelanto:');
+    // Enruta el aviso según el tipo de documento (por prefijo en el nombre):
+    // comprobante → Finanzas · OC/Especificaciones → Ingeniería · despiece → Producción · resto → Comercial.
+    let rolesDestino: Rol[] = ['Comercial'];
+    if (nombre.startsWith(DOC_PREFIX.comprobante)) rolesDestino = ['Finanzas'];
+    else if (nombre.startsWith(DOC_PREFIX.oc) || nombre.startsWith(DOC_PREFIX.especificaciones)) rolesDestino = ['Ingeniería'];
+    else if (nombre.startsWith(DOC_PREFIX.despiece)) rolesDestino = ['Producción'];
+
     await notificar({
       proyectoId: proyecto_id,
       tipo: 'documento',
-      mensaje: esComprobante
-        ? `${userData?.nombre ?? 'Comercial'} subió el comprobante de adelanto de ${proyecto_id}.`
-        : `${userData?.nombre ?? 'Alguien'} subió el documento "${nombre}" a ${proyecto_id}.`,
-      rolesDestino: esComprobante ? ['Finanzas'] : ['Comercial'],
+      mensaje: `${userData?.nombre ?? 'Alguien'} subió "${nombre}" a ${proyecto_id}.`,
+      rolesDestino,
       actorId: user.id,
       actorNombre: userData?.nombre,
     });

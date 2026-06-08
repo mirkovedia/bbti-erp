@@ -14,13 +14,13 @@ export const PERMS: Record<Rol, Permissions> = {
     canEditComercial: false, canExport: true,
   },
   Comercial: {
-    canCreate: true, canEdit: true, canDelete: false, canManageUsers: false,
+    canCreate: true, canEdit: true, canDelete: true, canManageUsers: false,
     canConfig: false, canViewReports: true, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: false, canEditIngenieria: false,
     canEditComercial: true, canExport: true,
   },
   Ingeniería: {
-    canCreate: false, canEdit: false, canDelete: false, canManageUsers: false,
+    canCreate: true, canEdit: false, canDelete: true, canManageUsers: false,
     canConfig: false, canViewReports: false, canViewFinance: true, canEditFinance: false,
     canEditProduccion: false, canEditLogistica: false, canEditIngenieria: true,
     canEditComercial: false, canExport: true,

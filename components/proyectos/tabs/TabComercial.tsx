@@ -7,12 +7,19 @@ import type { WorkBook } from 'xlsx';
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
-import { createClient } from '@/lib/supabase/client';
-import { DOCUMENTOS_BUCKET } from '@/lib/constants';
+import { DOC_PREFIX } from '@/lib/constants';
+import { subirDocumento } from '@/lib/utils/upload-documento';
 import { cn } from '@/lib/utils';
 import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet, type MaterialParsed, type SheetOption } from '@/lib/utils/parse-metrado';
 
-const COMPROBANTE_PREFIX = 'Comprobante adelanto: ';
+const COMPROBANTE_PREFIX = DOC_PREFIX.comprobante;
+
+// Días de plazo a partir de dos fechas (fecha de entrega menos fecha base). Nunca negativo.
+const calcDias = (fecha: string, base: string): number => {
+  if (!fecha || !base) return 0;
+  const d = Math.ceil((new Date(fecha).getTime() - new Date(base).getTime()) / 86400000);
+  return d > 0 ? d : 0;
+};
 
 interface Props {
   proyecto: Proyecto;
@@ -45,7 +52,8 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   }, [proyecto.id, comprobante?.id]);
 
   // ---- Importar metrado (Excel) ----
-  const canImport = can(user, 'canEditLogistica');
+  // El metrado es una tarea de Comercial; al importarlo se cargan los materiales de Logística.
+  const canImport = canEdit;
   const metradoInputRef = useRef<HTMLInputElement>(null);
   const [workbook, setWorkbook] = useState<WorkBook | null>(null);
   const [sheetOptions, setSheetOptions] = useState<SheetOption[]>([]);
@@ -130,28 +138,12 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto.id]);
 
-  // Subir comprobante del adelanto (reusa el flujo de documentos)
+  // Subir comprobante del adelanto (reusa el helper de documentos)
   const handleComprobante = async (file: File) => {
     setCompError('');
     setSubiendoComp(true);
     try {
-      const urlRes = await fetch('/api/documentos/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proyecto_id: proyecto.id, filename: file.name }),
-      });
-      if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
-      const { path, token } = await urlRes.json();
-      const supabase = createClient();
-      const { error: upErr } = await supabase.storage.from(DOCUMENTOS_BUCKET).uploadToSignedUrl(path, token, file);
-      if (upErr) throw new Error(upErr.message);
-      const tipo = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : null;
-      const metaRes = await fetch('/api/documentos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proyecto_id: proyecto.id, nombre: COMPROBANTE_PREFIX + file.name, tipo, storage_path: path }),
-      });
-      if (!metaRes.ok) throw new Error('No se pudo registrar el comprobante');
+      await subirDocumento(proyecto.id, file, COMPROBANTE_PREFIX);
       await refetch();
     } catch (e) {
       setCompError(e instanceof Error ? e.message : 'Error al subir');
@@ -159,6 +151,39 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
       setSubiendoComp(false);
       if (comprobanteInputRef.current) comprobanteInputRef.current.value = '';
     }
+  };
+
+  // ---- Adjuntos de Comercial: OC (Orden de Compra) y Especificaciones Técnicas ----
+  const oc = (proyecto.documentos || []).find((d) => (d.nombre || '').startsWith(DOC_PREFIX.oc));
+  const especificaciones = (proyecto.documentos || []).find((d) => (d.nombre || '').startsWith(DOC_PREFIX.especificaciones));
+  const ocInputRef = useRef<HTMLInputElement>(null);
+  const especInputRef = useRef<HTMLInputElement>(null);
+  const [subiendoAdjunto, setSubiendoAdjunto] = useState<'oc' | 'espec' | null>(null);
+  const [adjuntoError, setAdjuntoError] = useState('');
+
+  const handleAdjunto = async (file: File, prefix: string, tipo: 'oc' | 'espec') => {
+    setAdjuntoError('');
+    setSubiendoAdjunto(tipo);
+    try {
+      await subirDocumento(proyecto.id, file, prefix);
+      await refetch();
+    } catch (e) {
+      setAdjuntoError(e instanceof Error ? e.message : 'Error al subir');
+    } finally {
+      setSubiendoAdjunto(null);
+      if (ocInputRef.current) ocInputRef.current.value = '';
+      if (especInputRef.current) especInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadDoc = async (storage_path: string | null | undefined) => {
+    if (!storage_path) return;
+    const res = await fetch('/api/documentos/download-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storage_path }),
+    });
+    if (res.ok) { const { url } = await res.json(); window.open(url, '_blank'); }
   };
 
   const handleDownloadComprobante = async () => {
@@ -228,7 +253,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
           <input
             type="date"
             value={fechaEntrega}
-            onChange={(e) => setFechaEntrega(e.target.value)}
+            onChange={(e) => { setFechaEntrega(e.target.value); setDiasPlazo(calcDias(e.target.value, proyecto.fecha_creacion)); }}
             disabled={!canEdit}
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -236,15 +261,15 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
         <div>
           <label className="block text-sm font-medium text-slate-400 mb-1.5">
-            Días de Plazo
+            Días de Plazo <span className="text-slate-500">(automático)</span>
           </label>
           <input
             type="number"
             value={diasPlazo || ''}
-            onChange={(e) => setDiasPlazo(Number(e.target.value))}
-            disabled={!canEdit}
+            readOnly
             placeholder="0"
-            className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            title="Se calcula automáticamente a partir de la fecha de entrega"
+            className="w-full px-3 py-2 bg-slate-800/30 border border-slate-700 rounded-lg text-slate-300 cursor-not-allowed focus:outline-none"
           />
         </div>
 
@@ -370,6 +395,72 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
         </button>
       )}
 
+      {/* Documentos comerciales: OC y Especificaciones Técnicas (solo subir archivo) */}
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-blue-400" />
+          Documentos comerciales
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Orden de Compra (OC) */}
+          <div className="p-4 bg-slate-800/40 rounded-lg border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <Paperclip className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-medium text-white">Orden de Compra (OC)</span>
+            </div>
+            {oc ? (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/60 border border-slate-700 mb-2">
+                <FileText className="w-4 h-4 text-green-400 shrink-0" />
+                <span className="flex-1 text-xs text-white truncate">{oc.nombre.replace(DOC_PREFIX.oc, '')}</span>
+                <button onClick={() => handleDownloadDoc(oc.storage_path)} title="Descargar" className="p-1 text-slate-400 hover:text-white"><Download className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mb-2">Sin OC adjunta.</p>
+            )}
+            {canEdit && (
+              <>
+                <input ref={ocInputRef} type="file" accept=".pdf" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAdjunto(f, DOC_PREFIX.oc, 'oc'); }} />
+                <button type="button" onClick={() => ocInputRef.current?.click()} disabled={subiendoAdjunto === 'oc'}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">
+                  {subiendoAdjunto === 'oc' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {subiendoAdjunto === 'oc' ? 'Subiendo...' : oc ? 'Reemplazar OC' : 'Subir OC (PDF)'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Especificaciones Técnicas */}
+          <div className="p-4 bg-slate-800/40 rounded-lg border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium text-white">Especificaciones Técnicas</span>
+            </div>
+            {especificaciones ? (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/60 border border-slate-700 mb-2">
+                <FileText className="w-4 h-4 text-green-400 shrink-0" />
+                <span className="flex-1 text-xs text-white truncate">{especificaciones.nombre.replace(DOC_PREFIX.especificaciones, '')}</span>
+                <button onClick={() => handleDownloadDoc(especificaciones.storage_path)} title="Descargar" className="p-1 text-slate-400 hover:text-white"><Download className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mb-2">Sin especificaciones adjuntas.</p>
+            )}
+            {canEdit && (
+              <>
+                <input ref={especInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAdjunto(f, DOC_PREFIX.especificaciones, 'espec'); }} />
+                <button type="button" onClick={() => especInputRef.current?.click()} disabled={subiendoAdjunto === 'espec'}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">
+                  {subiendoAdjunto === 'espec' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {subiendoAdjunto === 'espec' ? 'Subiendo...' : especificaciones ? 'Reemplazar' : 'Subir Word/PDF'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        {adjuntoError && <p className="text-xs text-red-400 mt-2">{adjuntoError}</p>}
+      </div>
+
       {/* Comentarios */}
       <div>
         <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
@@ -460,7 +551,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                 <>
                   <p className="text-sm text-slate-300 mb-4">
                     Se detectaron <span className="text-green-400 font-semibold">{parsed.length} materiales</span>
-                    {' · '}Total metrado: <span className="text-white">S/ {totalParsed.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                    {' · '}Total metrado: <span className="text-white">S/ {totalParsed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                   </p>
                   <div className="overflow-x-auto rounded-lg border border-slate-800">
                     <table className="w-full text-sm">
@@ -478,7 +569,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                             <td className="py-1.5 px-3 text-blue-400 font-mono">{m.codigo}</td>
                             <td className="py-1.5 px-3 text-white">{m.nombre}</td>
                             <td className="py-1.5 px-3 text-center text-slate-300">{m.cantidad}</td>
-                            <td className="py-1.5 px-3 text-right text-slate-300">S/ {(m.precio_unitario || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
+                            <td className="py-1.5 px-3 text-right text-slate-300">S/ {(m.precio_unitario || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         ))}
                       </tbody>

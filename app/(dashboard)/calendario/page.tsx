@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, AlertTriangle } from 'lucide-react';
 import { Proyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { fm } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 
 // Días entre hoy y la fecha de entrega (negativo = vencido)
@@ -127,7 +128,7 @@ export default function CalendarioPage() {
                 {/* Pie */}
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Resp: {resp}</span>
-                  <span>Monto: S/ {p.monto.toLocaleString('es-PE')}</span>
+                  <span>Monto: {fm(p.monto)}</span>
                 </div>
               </button>
             );

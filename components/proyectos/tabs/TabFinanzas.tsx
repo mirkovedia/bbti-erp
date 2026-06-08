@@ -11,7 +11,7 @@ interface Props {
   onUpdate: (p: Proyecto) => void;
 }
 
-const fmt = (n: number) => `S/ ${n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmt = (n: number) => `S/ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   const { user } = useAppStore();

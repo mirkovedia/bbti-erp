@@ -123,13 +123,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // Create default production stages
+    // Create default production stages (flujo de fabricación de tableros)
     const etapasDefault = [
-      'Habilitado de material',
-      'Armado de estructura',
-      'Montaje de equipos',
-      'Cableado',
-      'Acabados',
+      'Habilitación de material',
+      'Área de Corte',
+      'Área de Doblez',
+      'Área de Soldadura',
+      'Área de Pintura',
+      'Área de Electricidad',
+      'Área de Ensamblaje',
     ];
 
     await supabase.from('proyecto_etapas').insert(
