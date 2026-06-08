@@ -34,11 +34,6 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   const [pagoNota, setPagoNota] = useState('');
   const [agregandoPago, setAgregandoPago] = useState(false);
 
-  const refetch = async () => {
-    const res = await fetch(`/api/proyectos/${proyecto.id}`);
-    if (res.ok) onUpdate(await res.json());
-  };
-
   if (!canView) {
     return (
       <div className="text-center py-12">
@@ -57,7 +52,7 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addPago: { descripcion: pagoNota, monto: pagoMonto, fecha: pagoFecha || undefined } }),
       });
-      if (res.ok) { setPagoMonto(0); setPagoFecha(''); setPagoNota(''); await refetch(); }
+      if (res.ok) { setPagoMonto(0); setPagoFecha(''); setPagoNota(''); onUpdate(await res.json()); }
     } finally {
       setAgregandoPago(false);
     }

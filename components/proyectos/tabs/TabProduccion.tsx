@@ -37,11 +37,6 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
 
   const [updatingEtapa, setUpdatingEtapa] = useState<string | null>(null);
 
-  const refetch = async () => {
-    const res = await fetch(`/api/proyectos/${proyecto.id}`);
-    if (res.ok) onUpdate(await res.json());
-  };
-
   const handleEtapaChange = async (etapaId: string, estado: EstadoEtapa) => {
     setUpdatingEtapa(etapaId);
     try {
@@ -54,7 +49,7 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ etapas: [{ id: etapaId, estado }], produccion: { progreso: nuevoProgreso } }),
       });
-      if (res.ok) await refetch();
+      if (res.ok) onUpdate(await res.json());
     } finally {
       setUpdatingEtapa(null);
     }

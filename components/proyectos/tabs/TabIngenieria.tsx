@@ -57,7 +57,7 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addObservacion: { texto } }),
       });
-      if (res.ok) { setNuevaObs(''); await refetch(); }
+      if (res.ok) { setNuevaObs(''); onUpdate(await res.json()); }
     } finally {
       setEnviando(false);
     }
@@ -139,7 +139,7 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updateDocumento: { id, estado: estado || null } }),
       });
-      if (res.ok) await refetch();
+      if (res.ok) onUpdate(await res.json());
     } finally {
       setSavingEstado(null);
     }

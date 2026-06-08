@@ -89,13 +89,11 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ materiales }),
       });
+      // El PATCH devuelve el proyecto actualizado → un solo viaje (sin GET extra).
       if (res.ok) {
-        const refetch = await fetch(`/api/proyectos/${proyecto.id}`);
-        if (refetch.ok) {
-          const data = await refetch.json();
-          setMateriales(data.logistica?.materiales || []);
-          onUpdate(data);
-        }
+        const data = await res.json();
+        setMateriales(data.logistica?.materiales || []);
+        onUpdate(data);
       }
     } finally {
       setSaving(false);

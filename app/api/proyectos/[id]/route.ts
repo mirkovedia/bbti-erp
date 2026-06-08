@@ -13,6 +13,46 @@ import {
 import { notificar, rolesParaConfirmacion, mensajeConfirmacion, rolDelAreaDeEtapa } from '@/lib/notificaciones';
 import type { Permissions, Rol } from '@/types';
 
+// Construye el proyecto completo (todas las áreas) en consultas paralelas.
+// Se reusa en el GET y al final del PATCH, así una acción se resuelve en UN solo
+// viaje (no hace falta un GET extra después de cada cambio).
+async function buildFullProyecto(supabase: Awaited<ReturnType<typeof createClient>>, id: string) {
+  const { data: proyecto, error } = await supabase
+    .from('proyectos').select('*').eq('id', id).single();
+  if (error || !proyecto) return null;
+
+  const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos, confirmaciones] = await Promise.all([
+    supabase.from('proyecto_comercial').select('*').eq('proyecto_id', id).maybeSingle(),
+    supabase.from('proyecto_ingenieria').select('*').eq('proyecto_id', id).maybeSingle(),
+    supabase.from('proyecto_materiales').select('*').eq('proyecto_id', id).order('id'),
+    supabase.from('proyecto_produccion').select('*').eq('proyecto_id', id).maybeSingle(),
+    supabase.from('proyecto_etapas').select('*').eq('proyecto_id', id).order('orden'),
+    supabase.from('proyecto_finanzas').select('*').eq('proyecto_id', id).maybeSingle(),
+    supabase.from('proyecto_pagos').select('*').eq('proyecto_id', id).order('fecha'),
+    supabase.from('proyecto_comentarios').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
+    supabase.from('proyecto_observaciones').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
+    supabase.from('proyecto_documentos').select('*').eq('proyecto_id', id).order('created_at', { ascending: false }),
+    supabase.from('proyecto_confirmaciones').select('*').eq('proyecto_id', id),
+  ]);
+
+  const fullProyecto = {
+    ...proyecto,
+    comercial: comercial.data ? { ...comercial.data, comentarios: comentarios.data || [] } : null,
+    ingenieria: ingenieria.data ? { ...ingenieria.data, observaciones: observaciones.data || [] } : null,
+    logistica: { materiales: materiales.data || [] },
+    produccion: produccion.data ? { ...produccion.data, etapas: etapas.data || [] } : null,
+    finanzas: finanzas.data ? { ...finanzas.data, pagos: pagos.data || [] } : null,
+    documentos: documentos.data || [],
+    confirmaciones: confirmaciones.data || [],
+  };
+
+  const hoy = new Date().toISOString().split('T')[0];
+  const confirmadas = new Set((confirmaciones.data ?? []).map((c) => c.etapa as EtapaFlujo));
+  const estadoBase = computeEstadoFromConfirmaciones(confirmadas);
+  fullProyecto.estado = aplicarRetraso(estadoBase, comercial.data?.fecha_entrega, hoy);
+  return fullProyecto;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,64 +60,9 @@ export async function GET(
   try {
     const { id } = await params;
     const supabase = await createClient();
-
-    const { data: proyecto, error } = await supabase
-      .from('proyectos')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error || !proyecto) {
-      return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
-    }
-
-    // Fetch all related data in parallel
-    const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos, confirmaciones] = await Promise.all([
-      supabase.from('proyecto_comercial').select('*').eq('proyecto_id', id).maybeSingle(),
-      supabase.from('proyecto_ingenieria').select('*').eq('proyecto_id', id).maybeSingle(),
-      supabase.from('proyecto_materiales').select('*').eq('proyecto_id', id).order('id'),
-      supabase.from('proyecto_produccion').select('*').eq('proyecto_id', id).maybeSingle(),
-      supabase.from('proyecto_etapas').select('*').eq('proyecto_id', id).order('orden'),
-      supabase.from('proyecto_finanzas').select('*').eq('proyecto_id', id).maybeSingle(),
-      supabase.from('proyecto_pagos').select('*').eq('proyecto_id', id).order('fecha'),
-      supabase.from('proyecto_comentarios').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
-      supabase.from('proyecto_observaciones').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
-      supabase.from('proyecto_documentos').select('*').eq('proyecto_id', id).order('created_at', { ascending: false }),
-      supabase.from('proyecto_confirmaciones').select('*').eq('proyecto_id', id),
-    ]);
-
-    const fullProyecto = {
-      ...proyecto,
-      comercial: comercial.data ? {
-        ...comercial.data,
-        comentarios: comentarios.data || [],
-      } : null,
-      ingenieria: ingenieria.data ? {
-        ...ingenieria.data,
-        observaciones: observaciones.data || [],
-      } : null,
-      logistica: {
-        materiales: materiales.data || [],
-      },
-      produccion: produccion.data ? {
-        ...produccion.data,
-        etapas: etapas.data || [],
-      } : null,
-      finanzas: finanzas.data ? {
-        ...finanzas.data,
-        pagos: pagos.data || [],
-      } : null,
-      documentos: documentos.data || [],
-      confirmaciones: confirmaciones.data || [],
-    };
-
-    // Estado derivado de las firmas de etapa + overlay RETRASADO al leer
-    const hoy = new Date().toISOString().split('T')[0];
-    const confirmadas = new Set((confirmaciones.data ?? []).map((c) => c.etapa as EtapaFlujo));
-    const estadoBase = computeEstadoFromConfirmaciones(confirmadas);
-    fullProyecto.estado = aplicarRetraso(estadoBase, comercial.data?.fecha_entrega, hoy);
-
-    return NextResponse.json(fullProyecto);
+    const full = await buildFullProyecto(supabase, id);
+    if (!full) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
+    return NextResponse.json(full);
   } catch (err) {
     console.error('GET /api/proyectos/[id] error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
@@ -332,7 +317,9 @@ export async function PATCH(
     const nuevoEstado = computeEstadoFromConfirmaciones(confirmadasAll);
     await supabase.from('proyectos').update({ estado: nuevoEstado, updated_at: now }).eq('id', id);
 
-    return NextResponse.json({ success: true, estado: nuevoEstado });
+    // Devolver el proyecto YA actualizado (un solo viaje: el cliente no necesita un GET extra).
+    const full = await buildFullProyecto(supabase, id);
+    return NextResponse.json(full ?? { success: true, estado: nuevoEstado });
   } catch (err) {
     console.error('PATCH /api/proyectos/[id] error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

@@ -107,7 +107,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
         body: JSON.stringify({ materiales: parsed, comercial: { metrado: metradoFile } }),
       });
       if (res.ok) {
-        await refetch();
+        onUpdate(await res.json());
         closeImport();
         setImportMsg(`${parsed.length} materiales importados a Logística.`);
       } else {
@@ -188,7 +188,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
       });
       if (res.ok) {
         setNuevoComentario('');
-        await refetch();
+        onUpdate(await res.json());
       }
     } finally {
       setEnviando(false);

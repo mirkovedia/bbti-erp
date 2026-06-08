@@ -25,11 +25,6 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
     etapas: proyecto.produccion?.etapas,
   });
 
-  const refetch = async () => {
-    const res = await fetch(`/api/proyectos/${proyecto.id}`);
-    if (res.ok) onUpdate(await res.json());
-  };
-
   const accion = async (etapa: EtapaFlujo, tipo: 'confirmar' | 'deshacer') => {
     setBusy(etapa);
     try {
@@ -39,7 +34,8 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (res.ok) await refetch();
+      // El PATCH devuelve el proyecto ya actualizado → un solo viaje (sin GET extra).
+      if (res.ok) onUpdate(await res.json());
     } finally {
       setBusy(null);
     }
