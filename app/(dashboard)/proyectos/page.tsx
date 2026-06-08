@@ -16,6 +16,7 @@ import { Proyecto, EstadoProyecto } from '@/types';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { useAppStore } from '@/store/appStore';
+import { useDebounce } from '@/hooks/useDebounce';
 import { can } from '@/lib/auth/permissions';
 import { ProyectoModal } from '@/components/proyectos/ProyectoModal';
 import { cn } from '@/lib/utils';
@@ -106,13 +107,15 @@ export default function ProyectosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
-  const filteredData = useMemo(() => proyectos.filter((p) => {
-    const matchesSearch =
-      p.cliente.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toLowerCase().includes(search.toLowerCase());
-    const matchesEstado = !estadoFilter || p.estado === estadoFilter;
-    return matchesSearch && matchesEstado;
-  }), [proyectos, search, estadoFilter]);
+  const debouncedSearch = useDebounce(search);
+  const filteredData = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return proyectos.filter((p) => {
+      const matchesSearch = p.cliente.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+      const matchesEstado = !estadoFilter || p.estado === estadoFilter;
+      return matchesSearch && matchesEstado;
+    });
+  }, [proyectos, debouncedSearch, estadoFilter]);
 
   const table = useReactTable({
     data: filteredData,

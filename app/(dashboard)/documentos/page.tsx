@@ -6,6 +6,7 @@ import { FileText, Download, Search, File, FileSpreadsheet, Upload, Trash2 } fro
 import type { Documento, DocumentoEvento, TipoEventoDoc, Rol } from '@/types';
 import { RoleBadge } from '@/components/shared/RoleBadge';
 import { fechaHora } from '@/lib/utils/format';
+import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 
 // La lista global añade el nombre del cliente (join con proyectos)
@@ -76,14 +77,17 @@ export default function DocumentosPage() {
     [docs]
   );
 
-  const filtered = docs.filter((d) => {
-    const q = search.toLowerCase();
-    const matchesSearch =
-      (d.nombre ?? '').toLowerCase().includes(q) ||
-      (d.cliente ?? '').toLowerCase().includes(q);
-    const matchesProyecto = !proyectoFilter || d.proyecto_id === proyectoFilter;
-    return matchesSearch && matchesProyecto;
-  });
+  const debouncedSearch = useDebounce(search);
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return docs.filter((d) => {
+      const matchesSearch =
+        (d.nombre ?? '').toLowerCase().includes(q) ||
+        (d.cliente ?? '').toLowerCase().includes(q);
+      const matchesProyecto = !proyectoFilter || d.proyecto_id === proyectoFilter;
+      return matchesSearch && matchesProyecto;
+    });
+  }, [docs, debouncedSearch, proyectoFilter]);
 
   const handleDownload = async (doc: DocumentoConCliente) => {
     if (!doc.storage_path) return;
