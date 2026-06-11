@@ -4,6 +4,7 @@ import { notificar } from '@/lib/notificaciones';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
 import { DOC_PREFIX } from '@/lib/constants';
 import type { Rol } from '@/types';
+import { checkUploadPermission } from '@/lib/auth/permissions';
 
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
@@ -62,6 +63,14 @@ export async function POST(request: Request) {
 
     const { data: userData } = await supabase
       .from('users').select('nombre, rol').eq('id', user.id).single();
+
+    if (!userData) {
+      return NextResponse.json({ error: 'Usuario no registrado' }, { status: 403 });
+    }
+
+    if (!checkUploadPermission(userData.rol as Rol, nombre)) {
+      return NextResponse.json({ error: 'No autorizado para registrar este tipo de archivo' }, { status: 403 });
+    }
 
     const { data, error } = await supabase
       .from('proyecto_documentos')

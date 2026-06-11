@@ -107,21 +107,25 @@ export default function ProyectoDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
           <button
             onClick={() => router.push('/proyectos')}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0 mt-1 sm:mt-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">{proyecto.id}</h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{proyecto.id}</h1>
               <StatusBadge estado={proyecto.estado} />
             </div>
-            <p className="text-slate-400 mt-1">
-              {proyecto.cliente} • Creado: {proyecto.fecha_creacion} • Monto: {fm(proyecto.monto)}
+            <p className="text-slate-400 mt-1 text-xs sm:text-sm leading-relaxed flex flex-wrap items-center gap-1 sm:gap-1.5">
+              <span className="text-white font-medium truncate max-w-[140px] sm:max-w-none">{proyecto.cliente}</span>
+              <span>•</span>
+              <span>Creado: {proyecto.fecha_creacion}</span>
+              <span>•</span>
+              <span className="inline-block">Monto: {fm(proyecto.monto)}</span>
             </p>
           </div>
         </div>
@@ -134,14 +138,14 @@ export default function ProyectoDetailPage() {
       <FlujoVerificacion proyecto={proyecto} onUpdate={setProyecto} />
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
-        <nav className="flex gap-1">
+      <div className="border-b border-slate-800 overflow-x-auto scrollbar-none">
+        <nav className="flex gap-1 min-w-max">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors',
+                'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors shrink-0',
                 activeTab === tab.id
                   ? 'bg-slate-800 text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'

@@ -106,7 +106,7 @@ export default function AlertasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Alertas</h1>
           <p className="text-slate-400 mt-1">
@@ -116,7 +116,7 @@ export default function AlertasPage() {
         {noLeidas.length > 0 && (
           <button
             onClick={marcarTodas}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 border border-slate-700 hover:bg-slate-700/60 text-white font-medium rounded-lg transition-all"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800/60 border border-slate-700 hover:bg-slate-700/60 text-white font-medium rounded-lg transition-all shrink-0"
           >
             <CheckCheck className="w-4 h-4" />
             Marcar todas como leídas

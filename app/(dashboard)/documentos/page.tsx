@@ -112,12 +112,12 @@ export default function DocumentosPage() {
       </div>
 
       {/* Tabs: Documentos / Actividad */}
-      <div className="border-b border-slate-800">
-        <nav className="flex gap-1">
+      <div className="border-b border-slate-800 overflow-x-auto scrollbar-none">
+        <nav className="flex gap-1 min-w-max">
           <button
             onClick={() => setView('documentos')}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors',
+              'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors shrink-0',
               view === 'documentos'
                 ? 'bg-slate-800 text-blue-400 border-b-2 border-blue-400'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -128,7 +128,7 @@ export default function DocumentosPage() {
           <button
             onClick={irActividad}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors',
+              'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors shrink-0',
               view === 'actividad'
                 ? 'bg-slate-800 text-blue-400 border-b-2 border-blue-400'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/50'

@@ -6,6 +6,7 @@ import { Proyecto, Material, EstadoMaterial } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
+import { fm } from '@/lib/utils/format';
 
 interface Props {
   proyecto: Proyecto;
@@ -51,7 +52,7 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
     [materiales]
   );
 
-  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
   const addMaterial = () => {
     if (!nuevo.nombre.trim()) return;
@@ -156,8 +157,8 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
                       m.comprado
                     )}
                   </td>
-                  <td className="py-3 px-3 text-sm text-right text-slate-300">S/ {fmt(m.precio_unitario || 0)}</td>
-                  <td className="py-3 px-3 text-sm text-right text-white">S/ {fmt(m.cantidad * (m.precio_unitario || 0))}</td>
+                  <td className="py-3 px-3 text-sm text-right text-slate-300">{fm(m.precio_unitario || 0)}</td>
+                  <td className="py-3 px-3 text-sm text-right text-white">{fm(m.cantidad * (m.precio_unitario || 0))}</td>
                   <td className="py-3 px-3 text-center">
                     <span className={cn('inline-flex px-2 py-0.5 rounded-full text-xs font-medium border', estadoColors[m.estado])}>
                       {m.estado}
@@ -179,7 +180,7 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
             <tfoot>
               <tr className="border-t border-slate-700 bg-slate-800/40">
                 <td colSpan={6} className="py-3 px-3 text-sm text-right font-medium text-slate-400 uppercase">Total metrado</td>
-                <td className="py-3 px-3 text-sm text-right font-bold text-green-400">S/ {fmt(totalGeneral)}</td>
+                <td className="py-3 px-3 text-sm text-right font-bold text-green-400">{fm(totalGeneral)}</td>
                 <td colSpan={canEdit ? 2 : 1} />
               </tr>
             </tfoot>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { PERMS } from '@/lib/auth/permissions';
+import { getRolePermissionsServer } from '@/lib/auth/permissions';
+import { registrarActividad } from '@/lib/utils/actividad';
 import {
   aplicarRetraso,
   computeEstadoFromConfirmaciones,
@@ -91,11 +92,33 @@ export async function PATCH(
       .single();
 
     const rol = userData?.rol as Rol | undefined;
+    const permsMap = await getRolePermissionsServer(supabase);
     const can = (perm: keyof Permissions): boolean =>
-      rol ? PERMS[rol]?.[perm] ?? false : false;
+      rol ? permsMap[rol]?.[perm] ?? false : false;
     const autor = userData?.nombre || 'Sistema';
     const today = new Date().toISOString().split('T')[0];
     const now = new Date().toISOString();
+
+    // Restaurar una PR de la papelera (requiere permiso de borrado)
+    if (body.restaurar === true) {
+      if (!can('canDelete')) {
+        return NextResponse.json({ error: 'Sin permiso para restaurar proyectos' }, { status: 403 });
+      }
+      const { error } = await supabase.from('proyectos').update({ activo: true }).eq('id', id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const full = await buildFullProyecto(supabase, id);
+      if (full) {
+        await registrarActividad({
+          proyectoId: id,
+          cliente: full.cliente,
+          usuario: autor,
+          rol: rol || 'Sistema',
+          accion: 'restaurar',
+          detalle: `restauró la orden de proyecto de la papelera`,
+        });
+      }
+      return NextResponse.json(full ?? { success: true });
+    }
 
     // Validar que cada sección enviada cuente con su permiso antes de escribir
     const requiere: Array<[boolean, keyof Permissions]> = [
@@ -133,11 +156,12 @@ export async function PATCH(
         return NextResponse.json({ error: `Sin permiso para firmar ${etapa}` }, { status: 403 });
       }
       // Revalidar readiness desde la BD (no confiar en el cliente)
-      const [docsR, matsR, etpsR, confsR] = await Promise.all([
+      const [docsR, matsR, etpsR, confsR, currentProy] = await Promise.all([
         supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_confirmaciones').select('etapa').eq('proyecto_id', id),
+        supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle(),
       ]);
       const ready = computeReadiness({
         confirmaciones: confsR.data ?? [],
@@ -155,6 +179,14 @@ export async function PATCH(
         { proyecto_id: id, etapa, confirmada_por: autor, confirmada_at: now },
         { onConflict: 'proyecto_id,etapa' }
       );
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy.data?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'firma',
+        detalle: `firmó y aprobó la etapa de ${etapa}`,
+      });
       await notificar({
         proyectoId: id,
         tipo: 'confirmacion',
@@ -174,11 +206,27 @@ export async function PATCH(
       if (!can(permForEtapa(etapa))) {
         return NextResponse.json({ error: `Sin permiso para deshacer ${etapa}` }, { status: 403 });
       }
+      const { data: currentProy } = await supabase
+        .from('proyectos')
+        .select('cliente')
+        .eq('id', id)
+        .maybeSingle();
+
       await supabase
         .from('proyecto_confirmaciones')
         .delete()
         .eq('proyecto_id', id)
         .in('etapa', cascadeEtapas(etapa));
+
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'deshacer',
+        detalle: `revirtió la firma de la etapa de ${etapa}`,
+      });
+
       await notificar({
         proyectoId: id,
         tipo: 'confirmacion',
@@ -243,6 +291,28 @@ export async function PATCH(
           }))
         );
       }
+
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      if (body.comercial?.metrado) {
+        const totalParsed = body.materiales.reduce((acc: number, m: any) => acc + (m.cantidad * (m.precio_unitario || 0)), 0);
+        await registrarActividad({
+          proyectoId: id,
+          cliente: currentProy?.cliente,
+          usuario: autor,
+          rol: rol || 'Sistema',
+          accion: 'metrado',
+          detalle: `importó metrado de Excel (${body.materiales.length} materiales) por un total de S/ ${totalParsed.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        });
+      } else {
+        await registrarActividad({
+          proyectoId: id,
+          cliente: currentProy?.cliente,
+          usuario: autor,
+          rol: rol || 'Sistema',
+          accion: 'compras',
+          detalle: `actualizó el estado de compra de materiales`,
+        });
+      }
     }
 
     // Metrado importado: si quien manda materiales es Comercial, avisa a Logística.
@@ -264,6 +334,19 @@ export async function PATCH(
         .update({ estado: body.updateDocumento.estado ?? null })
         .eq('id', body.updateDocumento.id)
         .eq('proyecto_id', id);
+
+      const { data: docInfo } = await supabase.from('proyecto_documentos').select('nombre').eq('id', body.updateDocumento.id).single();
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'documento',
+        detalle: `actualizó el estado del plano "${docInfo?.nombre || 'plano'}" a "${body.updateDocumento.estado || 'sin estado'}"`,
+      });
+
       // Plano "Enviados a comercial" → avisa a Comercial para que revise.
       if (typeof body.updateDocumento.estado === 'string' && /enviad/i.test(body.updateDocumento.estado)) {
         await notificar({
@@ -284,6 +367,16 @@ export async function PATCH(
           supabase.from('proyecto_etapas').update({ estado: e.estado }).eq('id', e.id)
         )
       );
+
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'produccion',
+        detalle: `actualizó el estado de las etapas de fabricación de producción`,
+      });
     }
 
     // Nuevo comentario (Comercial)
@@ -293,6 +386,16 @@ export async function PATCH(
         autor,
         texto: body.addComentario.texto,
         fecha: today,
+      });
+
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'comentario',
+        detalle: `agregó un comentario comercial: "${body.addComentario.texto.slice(0, 60)}${body.addComentario.texto.length > 60 ? '...' : ''}"`,
       });
     }
 
@@ -304,6 +407,16 @@ export async function PATCH(
         texto: body.addObservacion.texto,
         fecha: today,
       });
+
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'observacion',
+        detalle: `agregó una observación de ingeniería: "${body.addObservacion.texto.slice(0, 60)}${body.addObservacion.texto.length > 60 ? '...' : ''}"`,
+      });
     }
 
     // Nuevo pago adicional (Finanzas)
@@ -313,6 +426,16 @@ export async function PATCH(
         descripcion: body.addPago.descripcion ?? '',
         monto: body.addPago.monto,
         fecha: body.addPago.fecha ?? today,
+      });
+
+      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      await registrarActividad({
+        proyectoId: id,
+        cliente: currentProy?.cliente,
+        usuario: autor,
+        rol: rol || 'Sistema',
+        accion: 'pago',
+        detalle: `registró un pago adicional de S/ ${body.addPago.monto.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${body.addPago.descripcion || 'sin descripción'})`,
       });
     }
 
@@ -355,19 +478,34 @@ export async function DELETE(
       .single();
 
     const rol = userData?.rol as Rol | undefined;
-    if (!rol || !PERMS[rol]?.canDelete) {
+    const permsMap = await getRolePermissionsServer(supabase);
+    if (!rol || !permsMap[rol]?.canDelete) {
       return NextResponse.json({ error: 'Sin permiso para eliminar proyectos' }, { status: 403 });
     }
 
-    // Capturamos el cliente antes de borrar (para el mensaje de la notificación)
     const { data: proy } = await supabase
       .from('proyectos').select('cliente').eq('id', id).maybeSingle();
 
-    const { error } = await supabase.from('proyectos').delete().eq('id', id);
+    // Borrado suave: marcamos la PR como inactiva (papelera) en vez de borrarla.
+    // Así nunca se pierde y se puede restaurar.
+    const { error } = await supabase.from('proyectos').update({ activo: false }).eq('id', id);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: 'No se pudo enviar la PR a la papelera. Verifica que la migración 010 esté aplicada.' },
+        { status: 500 }
+      );
     }
+
+    // Registrar en la bitácora general de Command Center
+    await registrarActividad({
+      proyectoId: id,
+      cliente: proy?.cliente,
+      usuario: userData?.nombre || 'Sistema',
+      rol: rol || 'Sistema',
+      accion: 'eliminacion',
+      detalle: `envió la orden de proyecto a la papelera`,
+    });
 
     // Avisar a Administración y Gerencia que se eliminó una PR (trazabilidad)
     await notificar({

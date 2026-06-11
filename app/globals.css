@@ -88,3 +88,12 @@ body {
 
 /* Opciones de los <select> nativos: fondo oscuro + texto claro */
 select option { background-color: #0b1225; color: #e2e8f0; }
+
+/* Habilitar scroll horizontal sin barra visible */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

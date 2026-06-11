@@ -38,7 +38,7 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const fields = ['name', 'siglas', 'rubro', 'ruc', 'direccion', 'telefono', 'email', 'website', 'moneda', 'igv', 'orden_prefix'];
+    const fields = ['name', 'siglas', 'rubro', 'ruc', 'direccion', 'telefono', 'email', 'website', 'moneda', 'igv', 'orden_prefix', 'dias_alerta'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];

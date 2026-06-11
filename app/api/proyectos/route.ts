@@ -1,13 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
-import { PERMS } from '@/lib/auth/permissions';
+import { getRolePermissionsServer } from '@/lib/auth/permissions';
 import { aplicarRetraso, computeEstadoFromConfirmaciones, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import { notificar } from '@/lib/notificaciones';
+import { registrarActividad } from '@/lib/utils/actividad';
 import type { Rol } from '@/types';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
+    // ?papelera=1 → solo PRs en la papelera (inactivas); por defecto solo activas.
+    const verPapelera = new URL(request.url).searchParams.get('papelera') === '1';
 
     const { data: proyectos, error } = await supabase
       .from('proyectos')
@@ -17,6 +20,7 @@ export async function GET() {
         proyecto_produccion (progreso),
         proyecto_confirmaciones (etapa, confirmada_por, confirmada_at)
       `)
+      .eq('activo', !verPapelera)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -46,7 +50,13 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(formatted);
+    // Filtro defensivo en JS: funciona aunque la columna `activo` aún no exista
+    // (si es undefined se trata como activa). Inactiva solo cuando activo === false.
+    const visibles = formatted.filter((p) =>
+      verPapelera ? p.activo === false : p.activo !== false
+    );
+
+    return NextResponse.json(visibles);
   } catch (err) {
     console.error('GET /api/proyectos error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
@@ -63,21 +73,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    // Generar ID tipo PR-01-2024 a partir del máximo correlativo del año
+    // Generar ID tipo PREFIX-01-2024 a partir del máximo correlativo del año
     // (evita colisiones tras borrados; count+1 reutilizaría IDs ya existentes)
+    const { data: configData } = await supabase
+      .from('company_config')
+      .select('orden_prefix')
+      .limit(1)
+      .maybeSingle();
+    const prefix = configData?.orden_prefix || 'PR';
+
     const year = new Date().getFullYear();
     const { data: delAnio } = await supabase
       .from('proyectos')
       .select('id')
-      .like('id', `PR-%-${year}`);
+      .like('id', `${prefix}-%-${year}`);
 
     const maxCorrelativo = (delAnio || []).reduce((max, p) => {
-      const n = parseInt(p.id.split('-')[1], 10);
-      return Number.isFinite(n) && n > max ? n : max;
+      const parts = p.id.split('-');
+      if (parts.length >= 3 && parts[0] === prefix) {
+        const n = parseInt(parts[1], 10);
+        return Number.isFinite(n) && n > max ? n : max;
+      }
+      return max;
     }, 0);
 
     const nextNum = String(maxCorrelativo + 1).padStart(2, '0');
-    const id = `PR-${nextNum}-${year}`;
+    const id = `${prefix}-${nextNum}-${year}`;
 
     // Get user data for denormalized name + verificación de permiso
     const { data: userData } = await supabase
@@ -87,7 +108,8 @@ export async function POST(request: Request) {
       .single();
 
     const rol = userData?.rol as Rol | undefined;
-    if (!rol || !PERMS[rol]?.canCreate) {
+    const permsMap = await getRolePermissionsServer(supabase);
+    if (!rol || !permsMap[rol]?.canCreate) {
       return NextResponse.json({ error: 'No tienes permiso para crear proyectos' }, { status: 403 });
     }
 
@@ -111,6 +133,16 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Registrar en la bitácora general de Command Center
+    await registrarActividad({
+      proyectoId: id,
+      cliente: body.cliente,
+      usuario: userData?.nombre || 'Sistema',
+      rol: rol || 'Sistema',
+      accion: 'creacion',
+      detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
+    });
 
     // Create related records
     if (body.fecha_entrega || body.dias_plazo || body.adelanto) {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Settings, Save, Download, ShieldAlert } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Settings, Save, Download, Upload, Loader2, ShieldAlert } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 
@@ -17,6 +17,7 @@ interface CompanyConfig {
   moneda: string;
   igv: string;
   orden_prefix: string;
+  dias_alerta: string;
 }
 
 const EMPTY: CompanyConfig = {
@@ -30,7 +31,8 @@ const EMPTY: CompanyConfig = {
   website: '',
   moneda: 'S/',
   igv: '18',
-  orden_prefix: 'OC',
+  orden_prefix: 'PR',
+  dias_alerta: '7',
 };
 
 export default function ConfiguracionPage() {
@@ -39,6 +41,11 @@ export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+
+  // Estados para restauración de backup
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState('');
 
   const puedeConfig = can(user, 'canConfig');
 
@@ -92,18 +99,65 @@ export default function ConfiguracionPage() {
 
   const handleBackup = async () => {
     try {
-      const res = await fetch('/api/proyectos');
-      const proyectos = await res.json();
-      const backup = { config, proyectos, exportedAt: new Date().toISOString() };
+      const res = await fetch('/api/configuracion/backup');
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Error al generar respaldo: ${err.error}`);
+        return;
+      }
+      const backup = await res.json();
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `bbti-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `bbti-database-backup-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error backup:', err);
+      alert('Error de conexión al generar respaldo.');
+    }
+  };
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const confirmRestore = window.confirm(
+      '¡ATENCIÓN! Esta acción reemplazará la configuración de la empresa, los permisos de roles y TODOS los proyectos de la base de datos con los datos de este archivo de respaldo.\n\nEsta acción NO se puede deshacer. ¿Deseas continuar?'
+    );
+    if (!confirmRestore) {
+      if (restoreInputRef.current) restoreInputRef.current.value = '';
+      return;
+    }
+
+    setRestoring(true);
+    setRestoreMsg('');
+    try {
+      const text = await file.text();
+      const backupObj = JSON.parse(text);
+
+      const res = await fetch('/api/configuracion/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backupObj),
+      });
+
+      if (res.ok) {
+        setRestoreMsg('Base de datos restaurada correctamente. Recargando la aplicación...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2500);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setRestoreMsg(body.error || 'Error al restaurar el respaldo.');
+      }
+    } catch (err) {
+      console.error('Error restoring backup:', err);
+      setRestoreMsg('Archivo de respaldo no válido o corrupto.');
+    } finally {
+      setRestoring(false);
+      if (restoreInputRef.current) restoreInputRef.current.value = '';
     }
   };
 
@@ -138,28 +192,56 @@ export default function ConfiguracionPage() {
     { key: 'telefono', label: 'Teléfono' },
     { key: 'email', label: 'Email' },
     { key: 'website', label: 'Sitio web' },
+    { key: 'orden_prefix', label: 'Prefijo de Correlativo (Proyectos)', placeholder: 'PR' },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Configuración</h1>
-          <p className="text-slate-400 mt-1">Datos de la empresa y respaldo</p>
+          <p className="text-slate-400 mt-1">Datos de la empresa, respaldo y parámetros de sistema</p>
         </div>
-        <button
-          onClick={handleBackup}
-          className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 border border-slate-700 hover:bg-slate-700/60 text-white font-medium rounded-lg transition-all"
-        >
-          <Download className="w-4 h-4" />
-          Backup JSON
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Restaurar Backup */}
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleRestore}
+          />
+          <button
+            onClick={() => restoreInputRef.current?.click()}
+            disabled={restoring}
+            className="flex items-center gap-2 px-4 py-2.5 bg-amber-600/80 hover:bg-amber-600 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+          >
+            {restoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {restoring ? 'Restaurando...' : 'Restaurar Backup'}
+          </button>
+
+          {/* Generar Backup */}
+          <button
+            onClick={handleBackup}
+            disabled={restoring}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 border border-slate-700 hover:bg-slate-700/60 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            Backup JSON (Completo)
+          </button>
+        </div>
       </div>
+
+      {restoreMsg && (
+        <div className={`p-4 rounded-xl border ${restoreMsg.includes('correctamente') ? 'bg-green-500/10 border-green-500/30 text-green-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
+          <p className="text-sm font-medium">{restoreMsg}</p>
+        </div>
+      )}
 
       <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-6">
         <div className="flex items-center gap-2 mb-5">
           <Settings className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-semibold text-white">Datos de la empresa</h2>
+          <h2 className="text-lg font-semibold text-white">Datos de la empresa y sistema</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -190,13 +272,23 @@ export default function ConfiguracionPage() {
               className={inputCls}
             />
           </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Días para Alerta de Vencimiento (Reportes)</label>
+            <input
+              type="number"
+              value={config.dias_alerta ?? ''}
+              onChange={(e) => handleChange('dias_alerta', e.target.value)}
+              className={inputCls}
+              placeholder="7"
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-800">
           {savedMsg && <p className="text-sm text-green-400">{savedMsg}</p>}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || restoring}
             className="ml-auto flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
             <Save className="w-4 h-4" />

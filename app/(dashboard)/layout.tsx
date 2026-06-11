@@ -14,10 +14,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, setUser, sidebarCollapsed } = useAppStore();
+  const { user, setUser, sidebarCollapsed, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
 
   useEffect(() => {
-    const loadUser = async () => {
+    const loadData = async () => {
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -27,7 +27,34 @@ export default function DashboardLayout({
         return;
       }
 
-      // Si ya tenemos en memoria al usuario correcto, no recargamos.
+      // Cargar permisos de roles desde la base de datos
+      const { data: permsData } = await supabase
+        .from('role_permissions')
+        .select('*');
+
+      if (permsData && permsData.length > 0) {
+        const permsMap = permsData.reduce((acc, row) => {
+          acc[row.rol] = row.permissions;
+          return acc;
+        }, {} as any);
+        useAppStore.getState().setRolePermissions(permsMap);
+      }
+
+      // Cargar configuración de la empresa (moneda, igv)
+      const { data: configData } = await supabase
+        .from('company_config')
+        .select('moneda, igv')
+        .limit(1)
+        .maybeSingle();
+
+      if (configData) {
+        useAppStore.getState().setCompanyConfig(
+          configData.moneda || 'S/',
+          Number(configData.igv) || 18
+        );
+      }
+
+      // Si ya tenemos en memoria al usuario correcto, no recargamos el perfil.
       if (user && user.id === authUser.id) return;
 
       // Usuario distinto (o primer login): cargamos sus datos frescos.
@@ -42,7 +69,7 @@ export default function DashboardLayout({
       }
     };
 
-    loadUser();
+    loadData();
   }, [user, setUser, router]);
 
   // Mientras se carga la sesión, mostrar un loader a pantalla completa
@@ -57,15 +84,23 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[var(--navy)]">
+      {/* Backdrop for mobile sidebar */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 md:hidden transition-opacity duration-300"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       <Sidebar />
       <Topbar />
       <main
         className={cn(
-          'pt-[62px] transition-all duration-300 min-h-screen',
-          sidebarCollapsed ? 'ml-[68px]' : 'ml-[248px]'
+          'pt-[62px] transition-all duration-300 min-h-screen ml-0',
+          sidebarCollapsed ? 'md:ml-[68px]' : 'md:ml-[248px]'
         )}
       >
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           {children}
         </div>
       </main>

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { X } from 'lucide-react';
 import { createProyectoSchema, CreateProyectoInput } from '@/lib/validations/proyecto.schema';
 import { today } from '@/lib/utils/format';
+import { useAppStore } from '@/store/appStore';
 
 interface Props {
   onClose: () => void;
@@ -17,6 +18,7 @@ const proyectoResolver = zodResolver(createProyectoSchema);
 const proyectoDefaults: Partial<CreateProyectoInput> = { monto: 0 };
 
 export const ProyectoModal = ({ onClose, onCreated }: Props) => {
+  const { moneda } = useAppStore();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -70,7 +72,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-[var(--navy2)] border border-slate-700 rounded-xl w-full max-w-lg mx-4 p-6 shadow-2xl">
+      <div className="relative bg-[var(--navy2)] border border-slate-700 rounded-xl w-full max-w-lg mx-4 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white">Nueva Orden de Proyecto</h2>
           <button
@@ -101,7 +103,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Monto (S/)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Monto ({moneda || 'S/'})</label>
             <input
               type="number"
               step="0.01"
@@ -141,7 +143,7 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Adelanto (S/)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Adelanto ({moneda || 'S/'})</label>
             <input
               type="number"
               step="0.01"

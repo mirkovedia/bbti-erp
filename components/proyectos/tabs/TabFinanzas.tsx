@@ -5,16 +5,15 @@ import { DollarSign, Calendar, AlertTriangle, Lock, PlusCircle, Save, PieChart, 
 import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
+import { fm } from '@/lib/utils/format';
 
 interface Props {
   proyecto: Proyecto;
   onUpdate: (p: Proyecto) => void;
 }
 
-const fmt = (n: number) => `S/ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
-  const { user } = useAppStore();
+  const { user, moneda, igv } = useAppStore();
   const canEdit = can(user, 'canEditFinance');
   const canView = can(user, 'canViewFinance');
 
@@ -28,6 +27,11 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   const porCobrar = montoTotal - pagado;
   const pctPagado = montoTotal > 0 ? Math.round((pagado / montoTotal) * 100) : 0;
   const pctAvance = proyecto.produccion?.progreso || 0;
+
+  // Cálculo dinámico de IGV y Subtotal
+  const igvRate = Number(igv) || 18;
+  const subtotal = montoTotal / (1 + igvRate / 100);
+  const igvMonto = montoTotal - subtotal;
 
   const [pagoMonto, setPagoMonto] = useState(0);
   const [pagoFecha, setPagoFecha] = useState('');
@@ -59,11 +63,13 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
   };
 
   const resumen = [
-    { label: 'Monto total', value: fmt(montoTotal), color: 'bg-blue-500/10 border-blue-500/30 text-blue-300' },
-    { label: 'Adelanto inicial', value: fmt(adelantoInicial), color: 'bg-green-500/10 border-green-500/30 text-green-300' },
-    { label: 'Pagos adicionales', value: fmt(pagosAdicionales), color: 'bg-violet-500/10 border-violet-500/30 text-violet-300' },
-    { label: 'Por cobrar', value: fmt(porCobrar), color: 'bg-red-500/10 border-red-500/30 text-red-300' },
-    { label: '% Avance prod.', value: `${pctAvance}%`, color: 'bg-amber-500/10 border-amber-500/30 text-amber-300' },
+    { label: 'Monto total', value: fm(montoTotal), color: 'bg-blue-500/10 border-blue-500/30 text-blue-300' },
+    { label: 'Subtotal (sin IGV)', value: fm(subtotal), color: 'bg-slate-500/10 border-slate-500/30 text-slate-300' },
+    { label: `IGV (${igvRate}%)`, value: fm(igvMonto), color: 'bg-amber-500/10 border-amber-500/30 text-amber-300' },
+    { label: 'Adelanto inicial', value: fm(adelantoInicial), color: 'bg-green-500/10 border-green-500/30 text-green-300' },
+    { label: 'Pagos adicionales', value: fm(pagosAdicionales), color: 'bg-violet-500/10 border-violet-500/30 text-violet-300' },
+    { label: 'Por cobrar', value: fm(porCobrar), color: 'bg-red-500/10 border-red-500/30 text-red-300' },
+    { label: '% Avance prod.', value: `${pctAvance}%`, color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' },
     { label: '% Pagado', value: `${pctPagado}%`, color: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' },
   ];
 
@@ -81,7 +87,7 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
               <DollarSign className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-green-300">{fmt(adelantoInicial)}</p>
+              <p className="text-2xl font-bold text-green-300">{fm(adelantoInicial)}</p>
               <p className="text-xs text-slate-400 flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Registrado por Comercial — no modificable en Finanzas
               </p>
@@ -102,7 +108,7 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
                     <p className="text-sm text-white">{p.descripcion || 'Pago'}</p>
                     <p className="text-xs text-slate-500">{p.fecha}</p>
                   </div>
-                  <span className="text-sm font-medium text-green-300">{fmt(p.monto)}</span>
+                  <span className="text-sm font-medium text-green-300">{fm(p.monto)}</span>
                 </div>
               ))}
             </div>
@@ -119,7 +125,7 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
                 <input
                   type="number" min={0} value={pagoMonto || ''}
                   onChange={(e) => setPagoMonto(Number(e.target.value))}
-                  placeholder="Monto S/"
+                  placeholder={`Monto ${moneda || 'S/'}`}
                   className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500"
                 />
                 <input
@@ -184,9 +190,9 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
             </div>
             <div className="space-y-1 text-sm">
               <p className="text-slate-400">del total del proyecto</p>
-              <p className="text-slate-300">Total: <span className="text-white">{fmt(montoTotal)}</span></p>
-              <p className="text-slate-300">Pagado: <span className="text-green-400">{fmt(pagado)}</span></p>
-              <p className="text-slate-300">Pendiente: <span className="text-red-400">{fmt(porCobrar)}</span></p>
+              <p className="text-slate-300">Total: <span className="text-white">{fm(montoTotal)}</span></p>
+              <p className="text-slate-300">Pagado: <span className="text-green-400">{fm(pagado)}</span></p>
+              <p className="text-slate-300">Pendiente: <span className="text-red-400">{fm(porCobrar)}</span></p>
             </div>
           </div>
         </div>

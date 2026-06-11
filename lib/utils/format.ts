@@ -5,10 +5,15 @@
 export const nf = (value: number): string =>
   (value ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+import { useAppStore } from '@/store/appStore';
+
 /**
- * Formatea un monto en soles con separador de miles: "S/ 15,000.00".
+ * Formatea un monto con la moneda configurada y separador de miles: "S/ 15,000.00" o "USD 15,000.00".
  */
-export const fm = (value: number, moneda = 'S/'): string => `${moneda} ${nf(value)}`;
+export const fm = (value: number, moneda?: string): string => {
+  const activeMoneda = moneda || (typeof window !== 'undefined' ? useAppStore.getState().moneda : 'S/') || 'S/';
+  return `${activeMoneda} ${nf(value)}`;
+};
 
 /**
  * Fecha de hoy en formato ISO (YYYY-MM-DD).

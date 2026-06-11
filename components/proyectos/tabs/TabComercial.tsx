@@ -10,6 +10,7 @@ import { can } from '@/lib/auth/permissions';
 import { DOC_PREFIX } from '@/lib/constants';
 import { subirDocumento } from '@/lib/utils/upload-documento';
 import { cn } from '@/lib/utils';
+import { fm } from '@/lib/utils/format';
 import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet, type MaterialParsed, type SheetOption } from '@/lib/utils/parse-metrado';
 
 const COMPROBANTE_PREFIX = DOC_PREFIX.comprobante;
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export const TabComercial = ({ proyecto, onUpdate }: Props) => {
-  const { user } = useAppStore();
+  const { user, moneda } = useAppStore();
   const canEdit = can(user, 'canEditComercial');
   const comercial = proyecto.comercial;
 
@@ -276,7 +277,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
         <div>
           <label className="block text-sm font-medium text-slate-400 mb-1.5">
             <DollarSign className="w-4 h-4 inline mr-1" />
-            Adelanto (S/)
+            Adelanto ({moneda || 'S/'})
           </label>
           <input
             type="number"
@@ -551,7 +552,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                 <>
                   <p className="text-sm text-slate-300 mb-4">
                     Se detectaron <span className="text-green-400 font-semibold">{parsed.length} materiales</span>
-                    {' · '}Total metrado: <span className="text-white">S/ {totalParsed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    {' · '}Total metrado: <span className="text-white">{fm(totalParsed)}</span>
                   </p>
                   <div className="overflow-x-auto rounded-lg border border-slate-800">
                     <table className="w-full text-sm">
@@ -569,7 +570,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
                             <td className="py-1.5 px-3 text-blue-400 font-mono">{m.codigo}</td>
                             <td className="py-1.5 px-3 text-white">{m.nombre}</td>
                             <td className="py-1.5 px-3 text-center text-slate-300">{m.cantidad}</td>
-                            <td className="py-1.5 px-3 text-right text-slate-300">S/ {(m.precio_unitario || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td className="py-1.5 px-3 text-right text-slate-300">{fm(m.precio_unitario || 0)}</td>
                           </tr>
                         ))}
                       </tbody>

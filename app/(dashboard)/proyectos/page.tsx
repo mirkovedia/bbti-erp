@@ -140,15 +140,15 @@ export default function ProyectosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Proyectos</h1>
-          <p className="text-slate-400 mt-1">{proyectos.length} ordenes registradas</p>
+          <p className="text-slate-400 mt-1">{proyectos.length} órdenes registradas</p>
         </div>
         {can(user, 'canCreate') && (
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-medium rounded-lg transition-all shadow-lg shadow-blue-500/20"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-medium rounded-lg transition-all shadow-lg shadow-blue-500/20 shrink-0"
           >
             <Plus className="w-4 h-4" />
             Nueva Orden

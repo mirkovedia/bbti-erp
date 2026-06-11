@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DOCUMENTOS_BUCKET } from '@/lib/constants';
 import { NextResponse } from 'next/server';
+import { checkUploadPermission } from '@/lib/auth/permissions';
+import type { Rol } from '@/types';
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +14,16 @@ export async function POST(request: Request) {
     const { proyecto_id, filename } = await request.json();
     if (!proyecto_id || !filename) {
       return NextResponse.json({ error: 'proyecto_id y filename requeridos' }, { status: 400 });
+    }
+
+    const { data: userData } = await supabase
+      .from('users').select('rol').eq('id', user.id).single();
+    if (!userData) {
+      return NextResponse.json({ error: 'Usuario no registrado' }, { status: 403 });
+    }
+
+    if (!checkUploadPermission(userData.rol as Rol, filename)) {
+      return NextResponse.json({ error: 'No autorizado para subir este tipo de archivo' }, { status: 403 });
     }
 
     const { data: proyecto } = await supabase

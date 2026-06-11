@@ -37,6 +37,24 @@ await page.waitForTimeout(1200);
 const sinPermiso = await page.getByText('No tienes permisos para ver información financiera').count();
 ok(sinPermiso === 0, 'Comercial VE la pestaña Finanzas (sin candado)');
 
+// 2.5) Ingeniería: Comercial no debe ver botón de subir plano ni poder generar la URL
+await page.goto(`${BASE}/proyectos/${pid}`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+await page.getByRole('button', { name: 'Ingeniería' }).click().catch(() => {});
+await page.waitForTimeout(1200);
+const subirBtn = await page.getByRole('button', { name: 'Subir plano / documento' }).count();
+ok(subirBtn === 0, 'Comercial NO ve el botón "Subir plano / documento" en Ingeniería');
+
+const apiRes = await page.evaluate(async (projectId) => {
+  const res = await fetch('/api/documentos/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proyecto_id: projectId, filename: 'plano_infiltrado.pdf' }),
+  });
+  return res.status;
+}, pid);
+ok(apiRes === 403, 'API upload-url bloquea subida de planos a Comercial con 403');
+
 // 3) navegar por URL a /usuarios → bloqueado
 await page.goto(`${BASE}/usuarios`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1000);

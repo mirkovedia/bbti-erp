@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import { getAuthCookie, serviceClient } from './lib/supabase-test.mjs';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.BASE || 'http://localhost:3000';
 const log = (...a) => console.log(...a);
 let pass = 0, fail = 0;
 const check = (cond, msg) => { console.log((cond ? '✅ ' : '❌ ') + msg); cond ? pass++ : fail++; };
@@ -74,6 +74,11 @@ try {
   await page.locator('select').first().selectOption('Aprobados y firmados');
   await page.waitForTimeout(2800);
   fs.unlinkSync(planoTmp);
+  
+  // Firmar Ingeniería
+  log('   firmando etapa Ingeniería...');
+  await page.locator('button:has-text("Confirmar")').first().click();
+  await page.waitForTimeout(3500);
   check((await badge()) === 'COMPRAS EN CURSO', `plano aprobado y firmado → COMPRAS EN CURSO (${await badge()})`);
 
   // ④ LOGÍSTICA: comprar todos los materiales → EN PRODUCCIÓN
@@ -85,6 +90,11 @@ try {
   for (let i = 0; i < n; i++) await inputs.nth(i).fill('99999');
   await clic('Guardar cambios');
   await page.waitForTimeout(4500);
+
+  // Firmar Logística
+  log('   firmando etapa Logística...');
+  await page.locator('button:has-text("Confirmar")').first().click();
+  await page.waitForTimeout(3500);
   check((await badge()) === 'EN PRODUCCIÓN', `materiales completos → EN PRODUCCIÓN (${await badge()})`);
 
   // ⑤ PRODUCCIÓN: etapas 100% → LISTO PARA PRUEBAS; pruebas+envío → COMPLETADO
@@ -94,11 +104,22 @@ try {
   const ne = await selects.count();
   for (let i = 0; i < ne; i++) { await selects.nth(i).selectOption('COMPLETADO'); await page.waitForTimeout(1400); }
   await page.waitForTimeout(2500); // dejar que el refetch de la última etapa actualice el badge
+
+  // Firmar Producción
+  log('   firmando etapa Producción...');
+  await page.locator('button:has-text("Confirmar")').first().click();
+  await page.waitForTimeout(3500);
   check((await badge()) === 'LISTO PARA PRUEBAS', `producción 100% → LISTO PARA PRUEBAS (${await badge()})`);
-  const checks = page.locator('input[type="checkbox"]');
-  for (let i = 0; i < (await checks.count()); i++) { if (!(await checks.nth(i).isChecked())) await checks.nth(i).check(); }
-  await clic('Guardar');
-  await page.waitForTimeout(3000);
+
+  // Firmar Pruebas
+  log('   firmando etapa Pruebas...');
+  await page.locator('button:has-text("Confirmar")').first().click();
+  await page.waitForTimeout(2000);
+
+  // Firmar Completado
+  log('   firmando etapa Completado...');
+  await page.locator('button:has-text("Confirmar")').first().click();
+  await page.waitForTimeout(3500);
   check((await badge()) === 'COMPLETADO', `pruebas + envío → COMPLETADO (${await badge()})`);
 
   // captura final

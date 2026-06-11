@@ -35,6 +35,7 @@ const ESTADO_COLORS: Record<EstadoProyecto, string> = {
 
 export default function ReportesPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [warningDays, setWarningDays] = useState(7);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,8 +44,14 @@ export default function ReportesPage() {
         const res = await fetch('/api/proyectos');
         const data = await res.json();
         setProyectos(Array.isArray(data) ? data : []);
+
+        const configRes = await fetch('/api/configuracion');
+        const configData = await configRes.json();
+        if (configData && configData.dias_alerta !== undefined) {
+          setWarningDays(Number(configData.dias_alerta) || 7);
+        }
       } catch (err) {
-        console.error('Error fetching proyectos:', err);
+        console.error('Error fetching data:', err);
       } finally {
         setLoading(false);
       }
@@ -73,10 +80,10 @@ export default function ReportesPage() {
     cantidad: proyectos.filter((p) => p.estado === estado).length,
   }));
 
-  // Órdenes por vencer en los próximos 7 días
+  // Órdenes por vencer según configuración
   const porVencer = proyectos
     .map((p) => ({ p, dias: diasRestantes(p.comercial?.fecha_entrega) }))
-    .filter(({ dias }) => dias !== null && dias >= 0 && dias <= 7)
+    .filter(({ dias }) => dias !== null && dias >= 0 && dias <= warningDays)
     .sort((a, b) => (a.dias ?? 0) - (b.dias ?? 0));
 
   const kpis = [
@@ -195,7 +202,7 @@ export default function ReportesPage() {
 
       {/* Por vencer */}
       <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Órdenes por vencer (próximos 7 días)</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Órdenes por vencer (próximos {warningDays} días)</h2>
         {porVencer.length === 0 ? (
           <p className="text-slate-400 text-sm">No hay órdenes próximas a vencer.</p>
         ) : (
