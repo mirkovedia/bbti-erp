@@ -2,33 +2,35 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { 
-  PlusCircle, 
-  FileEdit, 
-  Trash2, 
-  FileSpreadsheet, 
-  CheckCircle2, 
-  ShoppingCart, 
-  MessageSquare, 
-  DollarSign, 
-  FileUp, 
+import {
+  PlusCircle,
+  FileEdit,
+  Trash2,
+  FileSpreadsheet,
+  CheckCircle2,
+  ShoppingCart,
+  MessageSquare,
+  DollarSign,
+  FileUp,
   Activity,
   FolderKanban,
   Search,
   RefreshCw,
   TrendingUp,
-  Bell,
+  CalendarClock,
+  Truck,
   SlidersHorizontal,
   ChevronRight,
   UserCheck,
   Clock
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
-import { fm, tiempoRelativo, fechaHora } from '@/lib/utils/format';
+import { fm, tiempoRelativo, fechaHora, diasRestantes } from '@/lib/utils/format';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Proyecto, EstadoProyecto } from '@/types';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 
 interface ActividadLog {
   id: string;
@@ -45,9 +47,35 @@ export default function DashboardPage() {
   const { user } = useAppStore();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [actividades, setActividades] = useState<ActividadLog[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Destello visual e ícono de carga
+  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
+
+  // Sintetiza un sonido de campana sutil para alertas en tiempo real sin archivos externos
+  const playChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880.00, audioCtx.currentTime + 0.12); // A5
+      
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+      
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.55);
+    } catch (err) {
+      console.warn('Audio Context bloqueado o no soportado:', err);
+    }
+  };
   
   // Filtros de la bitácora
   const [search, setSearch] = useState('');
@@ -59,10 +87,9 @@ export default function DashboardPage() {
     else setRefreshing(true);
 
     try {
-      const [proyRes, actRes, notifRes] = await Promise.all([
+      const [proyRes, actRes] = await Promise.all([
         fetch('/api/proyectos'),
-        fetch('/api/actividad'),
-        fetch('/api/notificaciones')
+        fetch('/api/actividad')
       ]);
 
       if (proyRes.ok) {
@@ -72,10 +99,6 @@ export default function DashboardPage() {
       if (actRes.ok) {
         const actData = await actRes.json();
         setActividades(actData);
-      }
-      if (notifRes.ok) {
-        const notifData = await notifRes.json();
-        setUnreadCount(notifData.unreadCount || 0);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -88,29 +111,108 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
 
-    // Polling en tiempo real cada 10 segundos
+    // Polling de respaldo cada 10 segundos
     const timer = setInterval(() => {
       fetchDashboardData(true);
     }, 10000);
 
-    return () => clearInterval(timer);
+    // Conexión WebSockets en tiempo real con Supabase
+    const supabase = createClient();
+    
+    // 1. Canal de Bitácora de Actividades (Command Center)
+    const actividadChannel = supabase
+      .channel('realtime-actividad-dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'actividad_log'
+        },
+        (payload) => {
+          const newLog = payload.new as ActividadLog;
+          
+          // Emitir sonido
+          playChime();
+          
+          // Añadir a la lista visual de actividades al inicio
+          setActividades((prev) => {
+            if (prev.some((a) => a.id === newLog.id)) return prev;
+            return [newLog, ...prev.slice(0, 49)];
+          });
+          
+          // Marcar temporalmente para efecto visual de destello
+          setNewlyAddedIds((prev) => {
+            const next = new Set(prev);
+            next.add(newLog.id);
+            return next;
+          });
+          
+          // Quitar el destello después de 4 segundos
+          setTimeout(() => {
+            setNewlyAddedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(newLog.id);
+              return next;
+            });
+          }, 4000);
+          
+          // Re-fetch silencioso de los KPIs y estados para mantener las tarjetas del gerente al día
+          fetchDashboardData(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(actividadChannel);
+    };
   }, []);
 
   // Calcular KPIs
   const kpis = useMemo(() => {
     const totalCount = proyectos.length;
     const totalMonto = proyectos.reduce((acc, p) => acc + (p.monto || 0), 0);
-    const avgProgreso = totalCount 
-      ? Math.round(proyectos.reduce((acc, p) => acc + (p.produccion?.progreso || 0), 0) / totalCount) 
+    const avgProgreso = totalCount
+      ? Math.round(proyectos.reduce((acc, p) => acc + (p.produccion?.progreso || 0), 0) / totalCount)
       : 0;
+
+    // Plata realmente en caja: adelantos + pagos registrados
+    const cobrado = proyectos.reduce((acc, p) => {
+      const adelanto = p.finanzas?.adelanto || 0;
+      const pagos = (p.finanzas?.pagos || []).reduce((s, pg) => s + (pg.monto || 0), 0);
+      return acc + adelanto + pagos;
+    }, 0);
+    const porCobrar = Math.max(0, totalMonto - cobrado);
 
     return {
       totalCount,
       totalMonto,
       avgProgreso,
-      unreadCount
+      cobrado,
+      porCobrar
     };
-  }, [proyectos, unreadCount]);
+  }, [proyectos]);
+
+  // Proyectos ordenados por cercanía de entrega (los retrasados primero)
+  const entregas = useMemo(() => {
+    const lista = proyectos
+      .filter((p) => p.estado !== 'COMPLETADO' && p.comercial?.fecha_entrega)
+      .map((p) => ({
+        id: p.id,
+        cliente: p.cliente,
+        estado: p.estado,
+        fecha_entrega: p.comercial!.fecha_entrega,
+        dias: diasRestantes(p.comercial!.fecha_entrega),
+      }))
+      .filter((p) => p.dias !== null)
+      .sort((a, b) => (a.dias as number) - (b.dias as number));
+
+    const retrasados = lista.filter((p) => (p.dias as number) < 0).length;
+    const estaSemana = lista.filter((p) => (p.dias as number) >= 0 && (p.dias as number) <= 7).length;
+
+    return { lista, retrasados, estaSemana };
+  }, [proyectos]);
 
   // Agrupamiento por Estados
   const estadoDistribucion = useMemo(() => {
@@ -257,33 +359,19 @@ export default function DashboardPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            Centro de Control: Monitoreo y Trazabilidad de Planta en Vivo
+            En vivo — todo lo que está pasando en la empresa ahora mismo
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={() => fetchDashboardData(true)}
-            className="flex items-center justify-center p-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-md group"
-            title="Refrescar datos"
+            className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-md group"
+            title="Actualizar datos"
           >
             <RefreshCw className={cn("w-5 h-5", refreshing && "animate-spin")} />
+            <span className="hidden sm:inline text-sm font-medium">Actualizar</span>
           </button>
-          
-          <Link 
-            href="/alertas" 
-            className="flex items-center gap-2 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 hover:text-white px-4 py-2.5 rounded-xl transition-all shadow-md"
-          >
-            <div className="relative">
-              <Bell className="w-5 h-5" />
-              {kpis.unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center animate-bounce">
-                  {kpis.unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="hidden sm:inline text-sm font-medium">Alertas</span>
-          </Link>
         </div>
       </div>
 
@@ -331,7 +419,7 @@ export default function DashboardPage() {
           {/* Blue in theme is brand amber */}
           <div className="absolute top-0 left-0 h-1 w-full bg-[var(--brand-amber)]" />
           <div className="flex items-center justify-between">
-            <span className="text-slate-400 font-semibold text-xs tracking-wider uppercase">Monto en Control</span>
+            <span className="text-slate-400 font-semibold text-xs tracking-wider uppercase">Plata en Proyectos</span>
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
               <DollarSign className="w-5 h-5" />
             </div>
@@ -340,26 +428,49 @@ export default function DashboardPage() {
             <span className="text-2xl font-extrabold text-white font-mono tracking-tight">
               {fm(kpis.totalMonto)}
             </span>
-            <p className="text-slate-400 text-xs mt-1">Suma total de presupuestos PRs</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span className="text-emerald-400 font-medium">
+                Cobrado: <span className="font-mono font-bold">{fm(kpis.cobrado)}</span>
+              </span>
+              <span className="text-amber-400 font-medium">
+                Por cobrar: <span className="font-mono font-bold">{fm(kpis.porCobrar)}</span>
+              </span>
+            </div>
           </div>
         </div>
 
         {/* KPI 4 */}
         <Link
-          href="/alertas"
-          className="group relative flex flex-col justify-between p-5 rounded-2xl bg-[var(--navy2)] border border-slate-800 hover:border-red-500/50 hover:bg-slate-900/40 transition-all duration-300 shadow-lg cursor-pointer overflow-hidden"
+          href="/proyectos"
+          className={cn(
+            "group relative flex flex-col justify-between p-5 rounded-2xl bg-[var(--navy2)] border transition-all duration-300 shadow-lg cursor-pointer overflow-hidden",
+            entregas.retrasados > 0
+              ? "border-red-500/40 hover:border-red-500/60 hover:bg-slate-900/40"
+              : "border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900/40"
+          )}
         >
-          <div className="absolute top-0 left-0 h-1 w-full bg-red-500" />
+          <div className={cn("absolute top-0 left-0 h-1 w-full", entregas.retrasados > 0 ? "bg-red-500" : "bg-emerald-500")} />
           <div className="flex items-center justify-between">
-            <span className="text-slate-400 font-semibold text-xs tracking-wider uppercase">Alertas Críticas</span>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
-              <Bell className="w-5 h-5" />
+            <span className="text-slate-400 font-semibold text-xs tracking-wider uppercase">Entregas y Retrasos</span>
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform",
+              entregas.retrasados > 0 ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
+            )}>
+              <CalendarClock className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-3xl font-extrabold text-white font-mono">{kpis.unreadCount}</span>
+            <span className={cn("text-3xl font-extrabold font-mono", entregas.retrasados > 0 ? "text-red-400" : "text-white")}>
+              {entregas.retrasados}
+            </span>
             <p className="text-slate-400 text-xs mt-1 flex items-center gap-1">
-              Notificaciones sin leer <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              {entregas.retrasados === 1 ? 'proyecto retrasado' : 'proyectos retrasados'}
+              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </p>
+            <p className="text-slate-500 text-[11px] mt-1.5">
+              {entregas.estaSemana > 0
+                ? `${entregas.estaSemana} ${entregas.estaSemana === 1 ? 'entrega' : 'entregas'} esta semana`
+                : 'Sin entregas esta semana'}
             </p>
           </div>
         </Link>
@@ -377,9 +488,9 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <Activity className="w-5 h-5 text-blue-400 animate-pulse" />
-                  Línea de Tiempo en Vivo
+                  Actividad Reciente
                 </h2>
-                <p className="text-xs text-slate-400 mt-1">Bitácora de operaciones y trazabilidad cruzada en planta</p>
+                <p className="text-xs text-slate-400 mt-1">Lo último que hizo cada área, en tiempo real</p>
               </div>
 
               {/* Polling status badge */}
@@ -469,7 +580,12 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Content Card */}
-                      <div className="bg-slate-900/30 hover:bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 rounded-xl p-4 transition-all duration-300 shadow-md hover:shadow-lg">
+                      <div className={cn(
+                        "bg-slate-900/30 hover:bg-slate-900/60 border transition-all duration-300 rounded-xl p-4 shadow-md hover:shadow-lg",
+                        newlyAddedIds.has(act.id)
+                          ? "border-[var(--brand-amber)] bg-blue-500/10 shadow-[0_0_15px_rgba(236,157,46,0.25)] animate-pulse"
+                          : "border-slate-800/80 hover:border-slate-700/80"
+                      )}>
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-white text-sm">
@@ -527,15 +643,69 @@ export default function DashboardPage() {
 
         {/* Right Column: Status Summary & Quick Info */}
         <div className="space-y-6">
-          
+
+          {/* Próximas Entregas */}
+          <div className="bg-[var(--navy2)] border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-500" />
+                Próximas Entregas
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">Lo que toca entregar pronto (los retrasados primero)</p>
+            </div>
+
+            {entregas.lista.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-500 bg-slate-900/10 border border-dashed border-slate-800 rounded-xl">
+                <CalendarClock className="w-7 h-7 mb-2 opacity-40" />
+                <p className="text-sm">No hay entregas programadas.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 pt-1">
+                {entregas.lista.slice(0, 4).map((e) => {
+                  const dias = e.dias as number;
+                  const atrasado = dias < 0;
+                  const urgente = dias >= 0 && dias <= 3;
+                  const dotColor = atrasado ? 'bg-red-500' : urgente ? 'bg-amber-500' : 'bg-emerald-500';
+                  const textColor = atrasado ? 'text-red-400' : urgente ? 'text-amber-400' : 'text-emerald-400';
+                  const etiqueta = atrasado
+                    ? `Atrasado ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''}`
+                    : dias === 0
+                      ? 'Entrega hoy'
+                      : `En ${dias} día${dias !== 1 ? 's' : ''}`;
+
+                  return (
+                    <Link
+                      key={e.id}
+                      href={`/proyectos/${e.id}`}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={cn("relative flex h-2.5 w-2.5 shrink-0", dotColor === 'bg-red-500' && 'animate-pulse')}>
+                          <span className={cn("relative inline-flex rounded-full h-2.5 w-2.5", dotColor)} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{e.cliente}</p>
+                          <p className="text-[11px] text-slate-500 font-mono truncate">{e.id} · {fechaHora(e.fecha_entrega).split(' ')[0]}</p>
+                        </div>
+                      </div>
+                      <span className={cn("text-[11px] font-bold shrink-0 text-right", textColor)}>
+                        {etiqueta}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Project State Distribution */}
           <div className="bg-[var(--navy2)] border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-                Distribución de Estados
+                ¿En qué etapa está cada proyecto?
               </h2>
-              <p className="text-xs text-slate-400 mt-1">Resumen del flujo actual de proyectos en fábrica</p>
+              <p className="text-xs text-slate-400 mt-1">Resumen del avance de todos los proyectos</p>
             </div>
 
             <div className="space-y-3 pt-2">
