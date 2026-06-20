@@ -1,42 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-  BarChart3,
-  TrendingUp,
-  DollarSign,
-  AlertTriangle,
-  CheckCircle2,
-} from 'lucide-react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
-import { Proyecto, EstadoProyecto } from '@/types';
-import { StatusBadge } from '@/components/shared/StatusBadge';
+import { useEffect, useState, useMemo } from 'react';
+import { cn } from '@/lib/utils';
+import type { Proyecto } from '@/types';
 import { ExportMenu } from '@/components/shared/ExportMenu';
 import { exportToExcel, exportToPDF } from '@/lib/utils/export';
-import { fm, diasRestantes } from '@/lib/utils/format';
+import { fm } from '@/lib/utils/format';
+import {
+  applyFiltros,
+  responsablesUnicos,
+  FILTROS_VACIOS,
+  type ReportesFiltros,
+} from '@/lib/utils/reportes';
+import { ReportesFiltrosBar } from '@/components/reportes/ReportesFiltros';
+import { TabGeneral } from '@/components/reportes/TabGeneral';
+import { TabFinanciero } from '@/components/reportes/TabFinanciero';
+import { TabResponsables } from '@/components/reportes/TabResponsables';
 
-const ESTADO_COLORS: Record<EstadoProyecto, string> = {
-  'EN PRODUCCIÓN': '#2563eb',
-  'LISTO PARA PRUEBAS': '#f59e0b',
-  'EN INGENIERÍA': '#06b6d4',
-  'COMPRAS EN CURSO': '#8b5cf6',
-  RETRASADO: '#f43f5e',
-  COMPLETADO: '#10b981',
-};
+type TabId = 'general' | 'financiero' | 'responsables';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'financiero', label: 'Financiero' },
+  { id: 'responsables', label: 'Responsables' },
+];
 
 export default function ReportesPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [warningDays, setWarningDays] = useState(7);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabId>('general');
+  const [filtros, setFiltros] = useState<ReportesFiltros>(FILTROS_VACIOS);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,42 +53,11 @@ export default function ReportesPage() {
     fetchData();
   }, []);
 
-  const total = proyectos.length;
-  const montoTotal = proyectos.reduce((acc, p) => acc + (p.monto || 0), 0);
-  const retrasados = proyectos.filter((p) => p.estado === 'RETRASADO').length;
-  const completados = proyectos.filter((p) => p.estado === 'COMPLETADO').length;
-  const tasaCompletado = total > 0 ? Math.round((completados / total) * 100) : 0;
-
-  const estados: EstadoProyecto[] = [
-    'EN INGENIERÍA',
-    'COMPRAS EN CURSO',
-    'EN PRODUCCIÓN',
-    'LISTO PARA PRUEBAS',
-    'RETRASADO',
-    'COMPLETADO',
-  ];
-
-  const chartData = estados.map((estado) => ({
-    estado: estado.length > 12 ? `${estado.slice(0, 11)}…` : estado,
-    estadoFull: estado,
-    cantidad: proyectos.filter((p) => p.estado === estado).length,
-  }));
-
-  // Órdenes por vencer según configuración
-  const porVencer = proyectos
-    .map((p) => ({ p, dias: diasRestantes(p.comercial?.fecha_entrega) }))
-    .filter(({ dias }) => dias !== null && dias >= 0 && dias <= warningDays)
-    .sort((a, b) => (a.dias ?? 0) - (b.dias ?? 0));
-
-  const kpis = [
-    { label: 'Total Órdenes', value: String(total), icon: BarChart3, color: 'text-blue-400' },
-    { label: 'Monto Total', value: fm(montoTotal), icon: DollarSign, color: 'text-cyan-400' },
-    { label: 'Retrasadas', value: String(retrasados), icon: AlertTriangle, color: 'text-red-400' },
-    { label: 'Tasa Completado', value: `${tasaCompletado}%`, icon: CheckCircle2, color: 'text-green-400' },
-  ];
+  const filtrados = useMemo(() => applyFiltros(proyectos, filtros), [proyectos, filtros]);
+  const responsables = useMemo(() => responsablesUnicos(proyectos), [proyectos]);
 
   const handleExportExcel = () => {
-    const rows = proyectos.map((p) => ({
+    const rows = filtrados.map((p) => ({
       ID: p.id,
       Cliente: p.cliente,
       Estado: p.estado,
@@ -116,7 +79,7 @@ export default function ReportesPage() {
       { header: 'Responsable', key: 'responsable' },
       { header: 'Entrega', key: 'entrega' },
     ];
-    const rows = proyectos.map((p) => ({
+    const rows = filtrados.map((p) => ({
       id: p.id,
       cliente: p.cliente,
       estado: p.estado,
@@ -148,83 +111,34 @@ export default function ReportesPage() {
           <h1 className="text-2xl font-bold text-white">Reportes</h1>
           <p className="text-slate-400 mt-1">Indicadores y análisis de proyectos</p>
         </div>
-        <ExportMenu onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} disabled={total === 0} />
+        <ExportMenu onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} disabled={filtrados.length === 0} />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.label} className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">{kpi.label}</p>
-                <Icon className="w-4 h-4 text-slate-500" />
-              </div>
-              <p className={`text-2xl font-bold mt-2 ${kpi.color}`}>
-                {kpi.value}
-              </p>
-            </div>
-          );
-        })}
+      <ReportesFiltrosBar filtros={filtros} onChange={setFiltros} responsables={responsables} />
+
+      {/* Tabs */}
+      <div className="border-b border-slate-800 overflow-x-auto scrollbar-none">
+        <nav className="flex gap-1 min-w-max">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors shrink-0',
+                tab === t.id
+                  ? 'bg-slate-800 text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      {/* Gráfico por estado */}
-      <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-semibold text-white">Distribución por Estado</h2>
-        </div>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="estado" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <YAxis allowDecimals={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#0b1225',
-                  border: '1px solid #334155',
-                  borderRadius: 8,
-                  color: '#fff',
-                }}
-                labelFormatter={(_, payload) => payload?.[0]?.payload?.estadoFull ?? ''}
-              />
-              <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
-                {chartData.map((entry) => (
-                  <Cell key={entry.estadoFull} fill={ESTADO_COLORS[entry.estadoFull as EstadoProyecto]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Por vencer */}
-      <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Órdenes por vencer (próximos {warningDays} días)</h2>
-        {porVencer.length === 0 ? (
-          <p className="text-slate-400 text-sm">No hay órdenes próximas a vencer.</p>
-        ) : (
-          <div className="space-y-2">
-            {porVencer.map(({ p, dias }) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between p-3 bg-slate-800/40 rounded-lg border border-slate-800"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-blue-400 font-mono text-sm">{p.id}</span>
-                  <span className="text-white text-sm">{p.cliente}</span>
-                  <StatusBadge estado={p.estado} />
-                </div>
-                <span className={`text-sm font-medium ${dias === 0 ? 'text-red-400' : 'text-amber-400'}`}>
-                  {dias === 0 ? 'Vence hoy' : `${dias} día${dias === 1 ? '' : 's'}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {tab === 'general' && <TabGeneral proyectos={filtrados} warningDays={warningDays} />}
+      {tab === 'financiero' && <TabFinanciero proyectos={filtrados} />}
+      {tab === 'responsables' && <TabResponsables proyectos={filtrados} />}
     </div>
   );
 }
