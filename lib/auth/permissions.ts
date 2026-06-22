@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Rol, Permissions, User } from '@/types';
 import { DOC_PREFIX } from '@/lib/constants';
 import { useAppStore } from '@/store/appStore';
@@ -96,7 +97,7 @@ export const checkUploadPermission = (
 };
 
 // Carga los permisos dinámicos desde la BD en el lado del servidor
-export const getRolePermissionsServer = async (supabase: any): Promise<Record<Rol, Permissions>> => {
+export const getRolePermissionsServer = async (supabase: SupabaseClient): Promise<Record<Rol, Permissions>> => {
   try {
     const { data, error } = await supabase.from('role_permissions').select('rol, permissions');
     if (error || !data || data.length === 0) {

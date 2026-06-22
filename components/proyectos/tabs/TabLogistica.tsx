@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Package, Trash2, Save } from 'lucide-react';
 import { Proyecto, Material, EstadoMaterial } from '@/types';
 import { useAppStore } from '@/store/appStore';
@@ -36,11 +36,12 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
   const [saving, setSaving] = useState(false);
   const [nuevo, setNuevo] = useState({ codigo: '', nombre: '', cantidad: 0, unidad: 'und', precio_unitario: 0 });
 
-  // Re-sincroniza la lista si cambia el proyecto mostrado
-  useEffect(() => {
+  // Re-sincroniza la lista si cambia el proyecto mostrado (patrón de ajuste en render)
+  const [prevProyectoId, setPrevProyectoId] = useState(proyecto.id);
+  if (proyecto.id !== prevProyectoId) {
+    setPrevProyectoId(proyecto.id);
     setMateriales(proyecto.logistica?.materiales || []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto.id]);
+  }
 
   const dirty = useMemo(
     () => JSON.stringify(materiales) !== JSON.stringify(proyecto.logistica?.materiales || []),

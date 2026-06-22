@@ -37,7 +37,7 @@ export async function GET() {
       'alertas'
     ];
 
-    const backupData: Record<string, any> = {};
+    const backupData: Record<string, unknown[]> = {};
 
     // Consultas en paralelo para rapidez
     const queries = tables.map(async (table) => {
@@ -55,8 +55,9 @@ export async function GET() {
       data: backupData
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('GET /api/configuracion/backup error:', err);
-    return NextResponse.json({ error: err.message || 'Error interno del servidor' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

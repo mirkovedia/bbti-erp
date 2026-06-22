@@ -63,7 +63,9 @@ export default function UsuariosPage() {
   
   // Estado local para edición de permisos
   const [selectedRole, setSelectedRole] = useState<Rol>('Comercial');
-  const [localPerms, setLocalPerms] = useState<Record<Rol, Permissions> | null>(null);
+  const [localPerms, setLocalPerms] = useState<Record<Rol, Permissions> | null>(
+    rolePermissions ? JSON.parse(JSON.stringify(rolePermissions)) : null
+  );
   const [savingPerms, setSavingPerms] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -83,15 +85,17 @@ export default function UsuariosPage() {
   };
 
   useEffect(() => {
+    // El setState ocurre tras await (deferido); falso positivo de set-state-in-effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsuarios();
   }, []);
 
-  // Inicializa localPerms cuando se abre la pestaña de roles o cambian los permisos globales
-  useEffect(() => {
-    if (rolePermissions) {
-      setLocalPerms(JSON.parse(JSON.stringify(rolePermissions))); // deep clone
-    }
-  }, [rolePermissions, activeTab]);
+  // Re-clona localPerms cuando se abre la pestaña de roles o cambian los permisos globales (ajuste en render)
+  const [prevPermsKey, setPrevPermsKey] = useState({ rp: rolePermissions, tab: activeTab });
+  if (rolePermissions && (prevPermsKey.rp !== rolePermissions || prevPermsKey.tab !== activeTab)) {
+    setPrevPermsKey({ rp: rolePermissions, tab: activeTab });
+    setLocalPerms(JSON.parse(JSON.stringify(rolePermissions))); // deep clone
+  }
 
   const toggleActivo = async (u: Usuario) => {
     try {

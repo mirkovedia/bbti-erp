@@ -7,6 +7,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { useAppStore } from '@/store/appStore';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import type { Rol, Permissions } from '@/types';
 
 export default function DashboardLayout({
   children,
@@ -33,11 +34,11 @@ export default function DashboardLayout({
         .select('*');
 
       if (permsData && permsData.length > 0) {
-        const permsMap = permsData.reduce((acc, row) => {
-          acc[row.rol] = row.permissions;
+        const permsMap = permsData.reduce<Record<string, Permissions>>((acc, row) => {
+          acc[row.rol] = row.permissions as Permissions;
           return acc;
-        }, {} as any);
-        useAppStore.getState().setRolePermissions(permsMap);
+        }, {});
+        useAppStore.getState().setRolePermissions(permsMap as Record<Rol, Permissions>);
       }
 
       // Cargar configuración de la empresa (moneda, igv)

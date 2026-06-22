@@ -56,7 +56,10 @@ export default function DashboardPage() {
   // Sintetiza un sonido de campana sutil para alertas en tiempo real sin archivos externos
   const playChime = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioCtx();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       
@@ -109,6 +112,8 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    // El setState corre tras await (o re-fija loading al mismo valor); falso positivo de set-state-in-effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDashboardData();
 
     // Polling de respaldo cada 10 segundos

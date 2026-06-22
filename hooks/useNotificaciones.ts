@@ -19,6 +19,8 @@ export const useNotificaciones = (userId: string | undefined) => {
 
   useEffect(() => {
     if (!userId) return;
+    // El setState ocurre tras await (deferido); falso positivo de set-state-in-effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     const supabase = createClient();
     const channel = supabase

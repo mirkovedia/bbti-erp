@@ -294,7 +294,11 @@ export async function PATCH(
 
       const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
       if (body.comercial?.metrado) {
-        const totalParsed = body.materiales.reduce((acc: number, m: any) => acc + (m.cantidad * (m.precio_unitario || 0)), 0);
+        const totalParsed = body.materiales.reduce(
+          (acc: number, m: { cantidad: number; precio_unitario?: number }) =>
+            acc + m.cantidad * (m.precio_unitario || 0),
+          0
+        );
         await registrarActividad({
           proyectoId: id,
           cliente: currentProy?.cliente,

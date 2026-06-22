@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Calendar, DollarSign, FileText, MessageSquare, Save, FileSpreadsheet, Upload, X, Loader2, Paperclip, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { WorkBook } from 'xlsx';
@@ -42,15 +42,18 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
   // ---- Comprobante del adelanto (toggle + subida) ----
   const comprobante = (proyecto.documentos || []).find((d) => (d.nombre || '').startsWith(COMPROBANTE_PREFIX));
-  const [mostrarComprobante, setMostrarComprobante] = useState(false);
+  const [mostrarComprobante, setMostrarComprobante] = useState(!!comprobante);
   const comprobanteInputRef = useRef<HTMLInputElement>(null);
   const [subiendoComp, setSubiendoComp] = useState(false);
   const [compError, setCompError] = useState('');
 
-  useEffect(() => {
+  // Muestra el comprobante automáticamente si aparece o cambia (ajuste en render)
+  const compKey = `${proyecto.id}:${comprobante?.id ?? ''}`;
+  const [prevCompKey, setPrevCompKey] = useState(compKey);
+  if (compKey !== prevCompKey) {
+    setPrevCompKey(compKey);
     setMostrarComprobante(!!comprobante);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto.id, comprobante?.id]);
+  }
 
   // ---- Importar metrado (Excel) ----
   // El metrado es una tarea de Comercial; al importarlo se cargan los materiales de Logística.
@@ -130,14 +133,15 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
   const totalParsed = parsed?.reduce((s, m) => s + m.cantidad * (m.precio_unitario || 0), 0) ?? 0;
 
-  // Re-sincroniza los campos si cambia el proyecto mostrado
-  useEffect(() => {
+  // Re-sincroniza los campos si cambia el proyecto mostrado (ajuste en render)
+  const [prevProyectoId, setPrevProyectoId] = useState(proyecto.id);
+  if (proyecto.id !== prevProyectoId) {
+    setPrevProyectoId(proyecto.id);
     setFechaEntrega(comercial?.fecha_entrega || '');
     setDiasPlazo(comercial?.dias_plazo || 0);
     setAdelanto(comercial?.adelanto || 0);
     setMetrado(comercial?.metrado || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto.id]);
+  }
 
   // Subir comprobante del adelanto (reusa el helper de documentos)
   const handleComprobante = async (file: File) => {
