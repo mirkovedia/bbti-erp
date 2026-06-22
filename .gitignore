@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# archivos de prueba generados por scripts/generate-test-files.mjs
+metrado_test.xlsx
+plano_test.pdf
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
