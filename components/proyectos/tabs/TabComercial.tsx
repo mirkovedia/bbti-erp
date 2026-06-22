@@ -9,6 +9,7 @@ import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { DOC_PREFIX } from '@/lib/constants';
 import { subirDocumento } from '@/lib/utils/upload-documento';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { cn } from '@/lib/utils';
 import { fm } from '@/lib/utils/format';
 import { parseMetradoSheet, listSheetsWithMateriales, suggestSheet, type MaterialParsed, type SheetOption } from '@/lib/utils/parse-metrado';
@@ -113,13 +114,14 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
     setImporting(true);
     setImportMsg('');
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ materiales: parsed, comercial: { metrado: metradoFile } }),
       });
       if (res.ok) {
-        onUpdate(await res.json());
+        applyIfFresh(token, await res.json(), onUpdate);
         closeImport();
         setImportMsg(`${parsed.length} materiales importados a Logística.`);
       } else {
@@ -202,8 +204,9 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   };
 
   const refetch = async () => {
+    const token = nextSyncToken();
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
-    if (res.ok) onUpdate(await res.json());
+    if (res.ok) applyIfFresh(token, await res.json(), onUpdate);
   };
 
   const handleComentario = async () => {
@@ -211,6 +214,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
     if (!texto) return;
     setEnviando(true);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +222,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
       });
       if (res.ok) {
         setNuevoComentario('');
-        onUpdate(await res.json());
+        applyIfFresh(token, await res.json(), onUpdate);
       }
     } finally {
       setEnviando(false);
@@ -228,6 +232,7 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -236,10 +241,10 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
         }),
       });
       if (res.ok) {
-        onUpdate({
+        applyIfFresh(token, {
           ...proyecto,
           comercial: { ...proyecto.comercial!, fecha_entrega: fechaEntrega, dias_plazo: diasPlazo, adelanto, adelanto_fijado: proyecto.comercial?.adelanto_fijado || false, metrado, alerta: proyecto.comercial?.alerta || '', comentarios: proyecto.comercial?.comentarios || [] },
-        });
+        }, onUpdate);
       }
     } finally {
       setSaving(false);

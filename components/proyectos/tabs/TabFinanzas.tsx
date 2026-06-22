@@ -6,6 +6,7 @@ import { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { fm } from '@/lib/utils/format';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 
 interface Props {
   proyecto: Proyecto;
@@ -51,12 +52,13 @@ export const TabFinanzas = ({ proyecto, onUpdate }: Props) => {
     if (!pagoMonto) return;
     setAgregandoPago(true);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addPago: { descripcion: pagoNota, monto: pagoMonto, fecha: pagoFecha || undefined } }),
       });
-      if (res.ok) { setPagoMonto(0); setPagoFecha(''); setPagoNota(''); onUpdate(await res.json()); }
+      if (res.ok) { setPagoMonto(0); setPagoFecha(''); setPagoNota(''); applyIfFresh(token, await res.json(), onUpdate); }
     } finally {
       setAgregandoPago(false);
     }

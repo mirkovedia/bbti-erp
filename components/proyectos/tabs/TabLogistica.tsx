@@ -6,6 +6,7 @@ import { Proyecto, Material, EstadoMaterial } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { fm } from '@/lib/utils/format';
 
 interface Props {
@@ -86,6 +87,7 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +97,7 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
       if (res.ok) {
         const data = await res.json();
         setMateriales(data.logistica?.materiales || []);
-        onUpdate(data);
+        applyIfFresh(token, data, onUpdate);
       }
     } finally {
       setSaving(false);

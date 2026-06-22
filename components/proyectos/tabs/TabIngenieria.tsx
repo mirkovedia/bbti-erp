@@ -10,6 +10,7 @@ import { fechaHora } from '@/lib/utils/format';
 import { DOC_PREFIX, ESTADOS_PLANO } from '@/lib/constants';
 import { subirDocumento } from '@/lib/utils/upload-documento';
 import { cn } from '@/lib/utils';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 
 interface Props {
   proyecto: Proyecto;
@@ -43,8 +44,9 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   const [enviando, setEnviando] = useState(false);
 
   const refetch = async () => {
+    const token = nextSyncToken();
     const res = await fetch(`/api/proyectos/${proyecto.id}`);
-    if (res.ok) onUpdate(await res.json());
+    if (res.ok) applyIfFresh(token, await res.json(), onUpdate);
   };
 
   const handleObservacion = async () => {
@@ -52,12 +54,13 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
     if (!texto) return;
     setEnviando(true);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addObservacion: { texto } }),
       });
-      if (res.ok) { setNuevaObs(''); onUpdate(await res.json()); }
+      if (res.ok) { setNuevaObs(''); applyIfFresh(token, await res.json(), onUpdate); }
     } finally {
       setEnviando(false);
     }
@@ -121,12 +124,13 @@ export const TabIngenieria = ({ proyecto, onUpdate }: Props) => {
   const handleDocEstado = async (id: string, estado: string) => {
     setSavingEstado(id);
     try {
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updateDocumento: { id, estado: estado || null } }),
       });
-      if (res.ok) onUpdate(await res.json());
+      if (res.ok) applyIfFresh(token, await res.json(), onUpdate);
     } finally {
       setSavingEstado(null);
     }

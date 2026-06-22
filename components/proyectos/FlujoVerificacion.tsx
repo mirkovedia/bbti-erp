@@ -6,6 +6,7 @@ import type { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { computeFlujoRows, permForEtapa, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -29,13 +30,15 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
     setBusy(etapa);
     try {
       const body = tipo === 'confirmar' ? { confirmarEtapa: { etapa } } : { deshacerEtapa: { etapa } };
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       // El PATCH devuelve el proyecto ya actualizado → un solo viaje (sin GET extra).
-      if (res.ok) onUpdate(await res.json());
+      // applyIfFresh descarta esta respuesta si una acción posterior ya se aplicó.
+      if (res.ok) applyIfFresh(token, await res.json(), onUpdate);
     } finally {
       setBusy(null);
     }

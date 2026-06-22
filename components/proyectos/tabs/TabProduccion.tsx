@@ -7,6 +7,7 @@ import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { cn } from '@/lib/utils';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 
 interface Props {
   proyecto: Proyecto;
@@ -44,12 +45,13 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
       const nuevoProgreso = nuevasEtapas.length > 0
         ? Math.round((nuevasEtapas.filter((e) => e.estado === 'COMPLETADO').length / nuevasEtapas.length) * 100)
         : 0;
+      const token = nextSyncToken();
       const res = await fetch(`/api/proyectos/${proyecto.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ etapas: [{ id: etapaId, estado }], produccion: { progreso: nuevoProgreso } }),
       });
-      if (res.ok) onUpdate(await res.json());
+      if (res.ok) applyIfFresh(token, await res.json(), onUpdate);
     } finally {
       setUpdatingEtapa(null);
     }
