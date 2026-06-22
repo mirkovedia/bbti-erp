@@ -74,7 +74,7 @@ export const tendenciaMensual = (proyectos: Proyecto[]) => {
 };
 
 // Cobrado de un proyecto = adelanto de finanzas + suma de pagos.
-export const cobradoDe = (p: Proyecto): number => {
+const cobradoDe = (p: Proyecto): number => {
   const adelanto = p.finanzas?.adelanto ?? 0;
   const pagos = (p.finanzas?.pagos ?? []).reduce((acc, pago) => acc + (pago.monto || 0), 0);
   return adelanto + pagos;

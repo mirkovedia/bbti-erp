@@ -2,7 +2,7 @@
  * Formatea un número con separador de miles (coma): 15000 -> "15,000.00".
  * Usa 'en-US' para garantizar la coma como separador de miles.
  */
-export const nf = (value: number): string =>
+const nf = (value: number): string =>
   (value ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 import { useAppStore } from '@/store/appStore';
