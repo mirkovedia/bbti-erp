@@ -39,6 +39,22 @@ const badge = async () =>
   ((await page.locator('span').filter({ hasText: /^(EN INGENIERÍA|COMPRAS EN CURSO|EN PRODUCCIÓN|LISTO PARA PRUEBAS|COMPLETADO|RETRASADO)$/ }).first().textContent().catch(() => '?')) || '?').trim();
 const tab = async (name) => { await clic(name); await page.waitForTimeout(900); };
 
+// Cada panel hace PATCH y sobreescribe el proyecto completo con su respuesta. Para
+// evitar carreras de last-writer-wins (un PATCH lento que pisa el estado fresco),
+// esperamos la RESPUESTA real de cada PATCH y luego el badge por CONDICIÓN, no por timeout.
+const esperaPatch = () =>
+  page.waitForResponse((r) => r.url().includes(`/api/proyectos/${projId}`) && r.request().method() === 'PATCH', { timeout: 15000 });
+const waitBadge = async (estado, timeout = 8000) => {
+  const re = new RegExp('^' + estado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
+  await page.locator('span').filter({ hasText: re }).first().waitFor({ timeout }).catch(() => {});
+  return badge();
+};
+// Firma la primera etapa "lista" y espera a que su PATCH resuelva.
+const firmar = async () => {
+  const [resp] = await Promise.all([esperaPatch(), page.locator('button:has-text("Confirmar")').first().click()]);
+  await resp.json().catch(() => {});
+};
+
 try {
   // LOGIN + abrir el proyecto
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
@@ -68,18 +84,21 @@ try {
   await tab('Ingeniería');
   const planoTmp = 'scripts/_plano_v1.pdf';
   fs.writeFileSync(planoTmp, 'plano de prueba ' + Date.now());
+  // el upload va por el flujo de /api/documentos (upload-url), no por PATCH de proyectos:
+  // esperamos a que el <select> de estado del plano aparezca en la lista.
   await page.locator('input[type="file"]').first().setInputFiles(planoTmp);
-  await page.waitForTimeout(4500);
-  // poner el estado del documento a "Aprobados y firmados"
-  await page.locator('select').first().selectOption('Aprobados y firmados');
-  await page.waitForTimeout(2800);
+  await page.locator('select').first().waitFor({ timeout: 12000 });
+  // aprobar el plano sí es un PATCH de proyectos (updateDocumento): esperamos su respuesta.
+  await Promise.all([esperaPatch(), page.locator('select').first().selectOption('Aprobados y firmados')]);
   fs.unlinkSync(planoTmp);
-  
+  // esperar a que Ingeniería quede "lista" (botón Confirmar visible) antes de firmar:
+  // garantiza que el setProyecto del PATCH de aprobación ya se aplicó (sin carrera).
+  await page.locator('button:has-text("Confirmar")').first().waitFor({ timeout: 8000 });
+
   // Firmar Ingeniería
   log('   firmando etapa Ingeniería...');
-  await page.locator('button:has-text("Confirmar")').first().click();
-  await page.waitForTimeout(3500);
-  check((await badge()) === 'COMPRAS EN CURSO', `plano aprobado y firmado → COMPRAS EN CURSO (${await badge()})`);
+  await firmar();
+  check((await waitBadge('COMPRAS EN CURSO')) === 'COMPRAS EN CURSO', `plano aprobado y firmado → COMPRAS EN CURSO (${await badge()})`);
 
   // ④ LOGÍSTICA: comprar todos los materiales → EN PRODUCCIÓN
   log('\n④ Logística: comprar todos los materiales...');
@@ -88,39 +107,37 @@ try {
   const n = await inputs.count();
   log(`   marcando ${n} materiales como comprados...`);
   for (let i = 0; i < n; i++) await inputs.nth(i).fill('99999');
-  await clic('Guardar cambios');
-  await page.waitForTimeout(4500);
+  await Promise.all([esperaPatch(), clic('Guardar cambios')]);
+  // esperar a que Logística quede lista antes de firmar
+  await page.locator('button:has-text("Confirmar")').first().waitFor({ timeout: 8000 });
 
   // Firmar Logística
   log('   firmando etapa Logística...');
-  await page.locator('button:has-text("Confirmar")').first().click();
-  await page.waitForTimeout(3500);
-  check((await badge()) === 'EN PRODUCCIÓN', `materiales completos → EN PRODUCCIÓN (${await badge()})`);
+  await firmar();
+  check((await waitBadge('EN PRODUCCIÓN')) === 'EN PRODUCCIÓN', `materiales completos → EN PRODUCCIÓN (${await badge()})`);
 
   // ⑤ PRODUCCIÓN: etapas 100% → LISTO PARA PRUEBAS; pruebas+envío → COMPLETADO
   log('\n⑤ Producción: completar etapas, pruebas y envío...');
   await tab('Producción');
   const selects = page.locator('select');
   const ne = await selects.count();
-  for (let i = 0; i < ne; i++) { await selects.nth(i).selectOption('COMPLETADO'); await page.waitForTimeout(1400); }
-  await page.waitForTimeout(2500); // dejar que el refetch de la última etapa actualice el badge
+  // cada cambio de etapa dispara un PATCH; esperamos su respuesta para serializar.
+  for (let i = 0; i < ne; i++) await Promise.all([esperaPatch(), selects.nth(i).selectOption('COMPLETADO')]);
+  await page.locator('button:has-text("Confirmar")').first().waitFor({ timeout: 8000 });
 
   // Firmar Producción
   log('   firmando etapa Producción...');
-  await page.locator('button:has-text("Confirmar")').first().click();
-  await page.waitForTimeout(3500);
-  check((await badge()) === 'LISTO PARA PRUEBAS', `producción 100% → LISTO PARA PRUEBAS (${await badge()})`);
+  await firmar();
+  check((await waitBadge('LISTO PARA PRUEBAS')) === 'LISTO PARA PRUEBAS', `producción 100% → LISTO PARA PRUEBAS (${await badge()})`);
 
-  // Firmar Pruebas
+  // Firmar Pruebas (el estado sigue en LISTO PARA PRUEBAS) y luego Completado
   log('   firmando etapa Pruebas...');
-  await page.locator('button:has-text("Confirmar")').first().click();
-  await page.waitForTimeout(2000);
+  await firmar();
+  await page.locator('button:has-text("Confirmar")').first().waitFor({ timeout: 8000 });
 
-  // Firmar Completado
   log('   firmando etapa Completado...');
-  await page.locator('button:has-text("Confirmar")').first().click();
-  await page.waitForTimeout(3500);
-  check((await badge()) === 'COMPLETADO', `pruebas + envío → COMPLETADO (${await badge()})`);
+  await firmar();
+  check((await waitBadge('COMPLETADO')) === 'COMPLETADO', `pruebas + envío → COMPLETADO (${await badge()})`);
 
   // captura final
   await page.screenshot({ path: 'scripts/_flujo-final.png' });
