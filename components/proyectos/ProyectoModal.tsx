@@ -139,6 +139,9 @@ export const ProyectoModal = ({ onClose, onCreated }: Props) => {
                 placeholder="Elige una fecha"
                 title="Se calcula automáticamente a partir de la fecha de entrega"
               />
+              {errors.dias_plazo && (
+                <p className="mt-1 text-xs text-red-400">{errors.dias_plazo.message}</p>
+              )}
             </div>
           </div>
 
