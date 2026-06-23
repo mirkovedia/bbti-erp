@@ -142,7 +142,7 @@ export const computeEstadoFromConfirmaciones = (confirmadas: Set<EtapaFlujo>): E
 export const cascadeEtapas = (etapa: EtapaFlujo): EtapaFlujo[] =>
   FLOW_ETAPAS.slice(FLOW_ETAPAS.indexOf(etapa));
 
-export type FilaFlujoStatus = 'confirmada' | 'lista' | 'faltan_datos' | 'esperando';
+type FilaFlujoStatus = 'confirmada' | 'lista' | 'faltan_datos' | 'esperando';
 
 export interface FilaFlujo {
   etapa: EtapaFlujo;

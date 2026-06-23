@@ -55,14 +55,14 @@ export interface Material {
   precio_unitario?: number;
 }
 
-export interface Etapa {
+interface Etapa {
   id: string;
   nombre: string;
   orden: number;
   estado: EstadoEtapa;
 }
 
-export interface Comentario {
+interface Comentario {
   id: string;
   autor: string;
   texto: string;
@@ -81,9 +81,9 @@ export interface Documento {
   created_at: string;
 }
 
-export type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
+type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
 
-export interface Confirmacion {
+interface Confirmacion {
   proyecto_id: string;
   etapa: EtapaFlujo;
   confirmada_por: string | null;
