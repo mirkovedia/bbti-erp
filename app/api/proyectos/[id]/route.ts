@@ -319,12 +319,15 @@ export async function PATCH(
       }
     }
 
-    // Metrado importado: si quien manda materiales es Comercial, avisa a Logística.
-    if (Array.isArray(body.materiales) && rol === 'Comercial') {
+    // Metrado importado: avisa a Logística. Se identifica por el flag de import
+    // (body.comercial.metrado), no por el rol del actor — así también notifica
+    // cuando importa Admin, no solo Comercial. La actualización de compras de
+    // Logística (materiales sin ese flag) no dispara aviso.
+    if (Array.isArray(body.materiales) && body.comercial?.metrado) {
       await notificar({
         proyectoId: id,
         tipo: 'datos',
-        mensaje: `Comercial importó el metrado de ${id}. Revisen las compras.`,
+        mensaje: `${autor} importó el metrado de ${id}. Revisen las compras.`,
         rolesDestino: ['Logística'],
         actorId: user.id,
         actorNombre: autor,
