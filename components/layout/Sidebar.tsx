@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Calendar,
   BarChart3,
+  Activity,
   Users,
   Settings,
   ChevronLeft,
@@ -25,6 +26,7 @@ const navItems: { href: string; label: string; icon: typeof FolderKanban; perm?:
   { href: '/proyectos', label: 'Proyectos', icon: FolderKanban },
   { href: '/calendario', label: 'Calendario', icon: Calendar },
   { href: '/reportes', label: 'Reportes', icon: BarChart3 },
+  { href: '/productividad', label: 'Productividad', icon: Activity, perm: 'canViewReports' },
   { href: '/usuarios', label: 'Usuarios', icon: Users, perm: 'canManageUsers' },
   { href: '/configuracion', label: 'Configuración', icon: Settings, perm: 'canConfig' },
 ];
