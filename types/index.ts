@@ -81,7 +81,7 @@ export interface Documento {
   created_at: string;
 }
 
-type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
+export type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
 
 interface Confirmacion {
   proyecto_id: string;

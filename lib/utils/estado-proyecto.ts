@@ -1,4 +1,4 @@
-import type { EstadoProyecto } from '@/types';
+import type { EstadoProyecto, EtapaFlujo } from '@/types';
 
 /**
  * Lógica del flujo del proyecto: el estado se DERIVA del avance de cada área,
@@ -81,7 +81,9 @@ export const aplicarRetraso = (
 // Confirmación manual de etapas (sign-off)
 // ---------------------------------------------------------------------------
 
-export type EtapaFlujo = 'ingenieria' | 'logistica' | 'produccion' | 'pruebas' | 'completado';
+// EtapaFlujo se define una sola vez en @/types; se re-exporta acá por comodidad
+// de los consumidores que ya importan desde este módulo (rutas API, cron).
+export type { EtapaFlujo };
 
 export const FLOW_ETAPAS: EtapaFlujo[] = ['ingenieria', 'logistica', 'produccion', 'pruebas', 'completado'];
 
