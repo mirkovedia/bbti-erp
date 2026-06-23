@@ -2,6 +2,12 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
+  // Los endpoints de cron se autentican con CRON_SECRET en su propio handler,
+  // no con la sesión de Supabase; deben saltarse el guard de redirección a /login.
+  if (request.nextUrl.pathname.startsWith('/api/cron')) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
