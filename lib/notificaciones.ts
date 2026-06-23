@@ -34,7 +34,7 @@ export const mensajeConfirmacion = (etapa: EtapaFlujo, proyectoId: string): stri
 
 export interface NotificarInput {
   proyectoId: string;
-  tipo: 'documento' | 'confirmacion' | 'datos' | 'hito';
+  tipo: 'documento' | 'confirmacion' | 'datos' | 'hito' | 'vencimiento';
   mensaje: string;
   rolesDestino: Rol[];
   actorId?: string;       // se excluye del fan-out
