@@ -7,7 +7,7 @@ import {
   computeEstadoFromConfirmaciones,
   computeReadiness,
   cascadeEtapas,
-  permForEtapa,
+  permsForEtapa,
   FLOW_ETAPAS,
   type EtapaFlujo,
 } from '@/lib/utils/estado-proyecto';
@@ -152,22 +152,28 @@ export async function PATCH(
       if (!FLOW_ETAPAS.includes(etapa)) {
         return NextResponse.json({ error: 'Etapa inválida' }, { status: 400 });
       }
-      if (!can(permForEtapa(etapa))) {
+      if (!permsForEtapa(etapa).some((p) => can(p))) {
         return NextResponse.json({ error: `Sin permiso para firmar ${etapa}` }, { status: 403 });
       }
-      // Revalidar readiness desde la BD (no confiar en el cliente)
-      const [docsR, matsR, etpsR, confsR, currentProy] = await Promise.all([
+      // Revalidar readiness desde la BD (no confiar en el cliente).
+      // Incluye monto/adelanto/pagos: "Completado" exige el pago al 100%.
+      const [docsR, matsR, etpsR, confsR, currentProy, comR, pagosR] = await Promise.all([
         supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
         supabase.from('proyecto_confirmaciones').select('etapa').eq('proyecto_id', id),
-        supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle(),
+        supabase.from('proyectos').select('cliente, monto').eq('id', id).maybeSingle(),
+        supabase.from('proyecto_comercial').select('adelanto').eq('proyecto_id', id).maybeSingle(),
+        supabase.from('proyecto_pagos').select('monto').eq('proyecto_id', id),
       ]);
       const ready = computeReadiness({
         confirmaciones: confsR.data ?? [],
         documentos: docsR.data ?? [],
         materiales: matsR.data ?? [],
         etapas: etpsR.data ?? [],
+        monto: currentProy.data?.monto,
+        adelanto: comR.data?.adelanto,
+        pagos: pagosR.data ?? [],
       });
       if (!ready[etapa]) {
         return NextResponse.json(
@@ -203,7 +209,7 @@ export async function PATCH(
       if (!FLOW_ETAPAS.includes(etapa)) {
         return NextResponse.json({ error: 'Etapa inválida' }, { status: 400 });
       }
-      if (!can(permForEtapa(etapa))) {
+      if (!permsForEtapa(etapa).some((p) => can(p))) {
         return NextResponse.json({ error: `Sin permiso para deshacer ${etapa}` }, { status: 403 });
       }
       const { data: currentProy } = await supabase

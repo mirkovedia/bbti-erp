@@ -36,9 +36,23 @@ ok(computeReadiness({ confirmaciones: [{ etapa: 'logistica' }], etapas: etapasOk
 // Pruebas lista en cuanto producción firmada (sin condición de datos)
 ok(computeReadiness({ confirmaciones: [{ etapa: 'produccion' }] }).pruebas === true,
   'producción firmada → pruebas lista');
-// Completado lista en cuanto pruebas firmada
-ok(computeReadiness({ confirmaciones: [{ etapa: 'pruebas' }] }).completado === true,
-  'pruebas firmada → completado lista');
+
+// Completado: pruebas firmada + PAGO AL 100% (pagado = adelanto + Σpagos ≥ monto)
+const firmadaPruebas = [{ etapa: 'pruebas' }];
+ok(computeReadiness({ confirmaciones: firmadaPruebas, monto: 10000, adelanto: 4000, pagos: [{ monto: 6000 }] }).completado === true,
+  'pruebas firmada + pago completo → completado lista');
+ok(computeReadiness({ confirmaciones: firmadaPruebas, monto: 10000, adelanto: 4000, pagos: [{ monto: 1000 }] }).completado === false,
+  'pruebas firmada + pago parcial → completado NO lista');
+ok(computeReadiness({ confirmaciones: firmadaPruebas, monto: 10000, adelanto: 4000 }).completado === false,
+  'pruebas firmada + solo adelanto → completado NO lista');
+ok(computeReadiness({ confirmaciones: firmadaPruebas }).completado === true,
+  'sin monto (nada que cobrar) → completado lista');
+// Coma flotante: 3333.33 + 6666.68 debe cubrir 10000.01 sin ruido de float
+ok(computeReadiness({ confirmaciones: firmadaPruebas, monto: 10000.01, adelanto: 3333.33, pagos: [{ monto: 6666.68 }] }).completado === true,
+  'pago con céntimos exactos → completado lista (sin ruido float)');
+// Pero pago incompleto por 1 céntimo NO alcanza
+ok(computeReadiness({ confirmaciones: firmadaPruebas, monto: 10000.01, adelanto: 3333.33, pagos: [{ monto: 6666.67 }] }).completado === false,
+  'falta 1 céntimo → completado NO lista');
 
 // --- computeEstadoFromConfirmaciones ---
 ok(computeEstadoFromConfirmaciones(new Set()) === 'EN INGENIERÍA', 'sin firmas → EN INGENIERÍA');
@@ -61,6 +75,19 @@ const rows = computeFlujoRows({
 ok(rows[0].status === 'confirmada' && rows[0].confirmadaPor === 'Juan', 'fila ingeniería confirmada con autor');
 ok(rows[1].status === 'faltan_datos', 'logística: ingeniería firmada + materiales parciales → faltan_datos');
 ok(rows[2].status === 'esperando', 'producción: logística sin firmar → esperando');
+
+// Fila Completado con pago pendiente → faltan_datos + detalle con el saldo
+const rowsPago = computeFlujoRows({
+  confirmaciones: [{ etapa: 'ingenieria' }, { etapa: 'logistica' }, { etapa: 'produccion' }, { etapa: 'pruebas' }],
+  monto: 50000, adelanto: 15000, pagos: [{ monto: 5000 }],
+});
+ok(rowsPago[4].status === 'faltan_datos', 'completado con pago parcial → faltan_datos');
+ok(rowsPago[4].detalle === 'Falta cobrar S/ 30,000.00', `detalle muestra el saldo (${rowsPago[4].detalle})`);
+const rowsPagado = computeFlujoRows({
+  confirmaciones: [{ etapa: 'ingenieria' }, { etapa: 'logistica' }, { etapa: 'produccion' }, { etapa: 'pruebas' }],
+  monto: 50000, adelanto: 15000, pagos: [{ monto: 35000 }],
+});
+ok(rowsPagado[4].status === 'lista', 'completado con pago total → lista');
 
 console.log(`\n===== ${pass} OK / ${fail} fallos =====`);
 process.exit(fail ? 1 : 0);

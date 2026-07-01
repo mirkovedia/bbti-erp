@@ -38,9 +38,17 @@ await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: H, body: 
 await confirmar(id, 'produccion');
 expect(await getEstado(id) === 'LISTO PARA PRUEBAS', '⑤ producción firmada → LISTO PARA PRUEBAS');
 
-// ⑥ Pruebas + Completado
+// ⑥ Pruebas + Completado. "Completado" exige pago al 100% y también la firma Finanzas.
 await confirmar(id, 'pruebas');
-await confirmar(id, 'completado');
+const rSinPago = await confirmar(id, 'completado');
+expect(rSinPago.status === 409, '⑥ completado sin pago total → 409 NOT_READY');
+const cookieFin = await getAuthCookie('finanzas@bbti.com.pe', 'rosam');
+const HFin = { 'Content-Type': 'application/json', cookie: cookieFin };
+await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: HFin,
+  body: JSON.stringify({ addPago: { monto: 35000, descripcion: 'saldo final' } }) });
+const rFin = await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH', headers: HFin,
+  body: JSON.stringify({ confirmarEtapa: { etapa: 'completado' } }) });
+expect(rFin.status === 200, `⑥ Finanzas paga el saldo y firma completado → 200 (${rFin.status})`);
 expect(await getEstado(id) === 'COMPLETADO', '⑥ completado firmado → COMPLETADO');
 
 // ⑦ Deshacer Logística (cascada) → vuelve a COMPRAS EN CURSO

@@ -5,7 +5,7 @@ import { Check, Loader2, CircleDashed, AlertCircle, Undo2 } from 'lucide-react';
 import type { Proyecto } from '@/types';
 import { useAppStore } from '@/store/appStore';
 import { can } from '@/lib/auth/permissions';
-import { computeFlujoRows, permForEtapa, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
+import { computeFlujoRows, permsForEtapa, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +24,10 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
     documentos: proyecto.documentos,
     materiales: proyecto.logistica?.materiales,
     etapas: proyecto.produccion?.etapas,
+    // "Completado" exige pago al 100% (misma fórmula que TabFinanzas)
+    monto: proyecto.monto,
+    adelanto: proyecto.comercial?.adelanto,
+    pagos: proyecto.finanzas?.pagos,
   });
 
   const accion = async (etapa: EtapaFlujo, tipo: 'confirmar' | 'deshacer') => {
@@ -49,7 +53,7 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
       <h3 className="text-sm font-semibold text-slate-300 mb-4">Verificación del flujo</h3>
       <div className="space-y-2">
         {rows.map((row, i) => {
-          const puede = can(user, permForEtapa(row.etapa));
+          const puede = permsForEtapa(row.etapa).some((p) => can(user, p));
           const loading = busy === row.etapa;
           return (
             <div

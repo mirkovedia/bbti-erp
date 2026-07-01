@@ -95,20 +95,34 @@ export const ETAPA_LABEL: Record<EtapaFlujo, string> = {
   completado: 'Completado',
 };
 
-/** Permiso requerido para firmar/deshacer cada etapa. */
-export const permForEtapa = (
+/** Permisos que habilitan firmar/deshacer cada etapa (basta con tener uno). */
+export const permsForEtapa = (
   etapa: EtapaFlujo
-): 'canEditIngenieria' | 'canEditLogistica' | 'canEditProduccion' =>
-  etapa === 'ingenieria' ? 'canEditIngenieria'
-  : etapa === 'logistica' ? 'canEditLogistica'
-  : 'canEditProduccion';
+): Array<'canEditIngenieria' | 'canEditLogistica' | 'canEditProduccion' | 'canEditFinance'> =>
+  etapa === 'ingenieria' ? ['canEditIngenieria']
+  : etapa === 'logistica' ? ['canEditLogistica']
+  // Completado también la firma Finanzas: el cierre exige el pago al 100%,
+  // así que quien cobra puede dar el cierre (decisión 2026-07-01).
+  : etapa === 'completado' ? ['canEditProduccion', 'canEditFinance']
+  : ['canEditProduccion'];
 
 export interface FlujoInput {
   confirmaciones?: { etapa: string; confirmada_por?: string | null; confirmada_at?: string | null }[];
   documentos?: { estado?: string | null }[];
   materiales?: { estado?: string | null }[];
   etapas?: { estado?: string | null }[];
+  /** Requisito de pago de "Completado": misma fórmula que TabFinanzas
+   *  (pagado = comercial.adelanto + Σ pagos; pendiente = monto − pagado). */
+  monto?: number | null;
+  adelanto?: number | null;
+  pagos?: { monto?: number | null }[];
 }
+
+/** Saldo por cobrar, redondeado a céntimos (evita ruido de coma flotante). */
+export const pagoPendiente = (input: FlujoInput): number => {
+  const pagado = (input.adelanto ?? 0) + (input.pagos ?? []).reduce((s, p) => s + (p.monto ?? 0), 0);
+  return Math.max(0, Math.round(((input.monto ?? 0) - pagado) * 100) / 100);
+};
 
 const confirmadasSet = (input: FlujoInput): Set<EtapaFlujo> =>
   new Set((input.confirmaciones ?? []).map((c) => c.etapa as EtapaFlujo));
@@ -127,7 +141,7 @@ export const computeReadiness = (input: FlujoInput): Record<EtapaFlujo, boolean>
     logistica: c.has('ingenieria') && materialesOk,
     produccion: c.has('logistica') && etapasOk,
     pruebas: c.has('produccion'),
-    completado: c.has('pruebas'),
+    completado: c.has('pruebas') && pagoPendiente(input) === 0,
   };
 };
 
@@ -183,7 +197,12 @@ export const computeFlujoRows = (input: FlujoInput): FilaFlujo[] => {
     if (etapa === 'pruebas') {
       return status === 'esperando' ? 'Esperando Producción' : 'Lista para confirmar';
     }
-    return status === 'esperando' ? 'Esperando Pruebas' : 'Lista para confirmar';
+    // Completado: requiere pruebas firmadas + pago al 100%.
+    if (status === 'esperando') return 'Esperando Pruebas';
+    if (status === 'faltan_datos') {
+      return `Falta cobrar S/ ${pagoPendiente(input).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    }
+    return 'Pago completo — lista para confirmar';
   };
 
   return FLOW_ETAPAS.map((etapa, i) => {
