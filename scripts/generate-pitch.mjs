@@ -35,7 +35,7 @@ function crearSlideContenido(titulo, notasExposicion) {
     y: 1.1,
     w: 11.5,
     h: 0.03,
-    fill: { fill: AMBER_COLOR }
+    fill: { color: AMBER_COLOR }
   });
 
   // Notas de exposición para el presentador
@@ -84,7 +84,7 @@ s1.addText('Eficiencia, Trazabilidad en Tiempo Real y Control Absoluto', {
   color: GRAY_COLOR
 });
 
-s1.addText('Presentación de Defensa del Proyecto · Junio 2026', {
+s1.addText('Presentación de Defensa del Proyecto · Versión 2 (Junio 2026)', {
   x: 1.0,
   y: 5.8,
   w: 11.3,
@@ -159,7 +159,7 @@ pilares.forEach((p, idx) => {
     y: yPos,
     w: 5.4,
     h: 1.9,
-    fill: { fill: TEAL_COLOR },
+    fill: { color: TEAL_COLOR },
     line: { color: AMBER_COLOR, width: 1 }
   });
 
@@ -329,7 +329,7 @@ metricas.forEach((m, idx) => {
     y: 1.6,
     w: 1.8,
     h: 1.8,
-    fill: { fill: TEAL_COLOR },
+    fill: { color: TEAL_COLOR },
     line: { color: AMBER_COLOR, width: 2 }
   });
 
@@ -359,7 +359,7 @@ metricas.forEach((m, idx) => {
   });
 });
 
-s8.addText('➔ Mayor control de planta · ➔ Eliminación de cuellos de botella · ➔ Decisiones basadas en datos', {
+s8.addText('➔ Mayor control de planta · ➔ Alertas que se adelantan a los retrasos · ➔ Decisiones basadas en datos', {
   x: 0.8,
   y: 5.2,
   w: 11.0,
@@ -370,6 +370,138 @@ s8.addText('➔ Mayor control de planta · ➔ Eliminación de cuellos de botell
   color: AMBER_COLOR,
   align: 'center'
 });
+
+
+// ==========================================
+// SECCIÓN NUEVA: NOVEDADES DESDE LA ÚLTIMA REVISIÓN
+// (cambios posteriores al 15 de junio · enfoque en usabilidad)
+// ==========================================
+
+// --- Helper: slide de funcionalidad nueva con chip "NUEVO" ---
+function crearSlideNovedad(titulo, etiquetaEstado, bloques, notas) {
+  const slide = crearSlideContenido(titulo, notas);
+
+  // Chip "NUEVO" en la esquina superior derecha
+  slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
+    x: 10.7, y: 0.45, w: 1.9, h: 0.5,
+    fill: { color: AMBER_COLOR }, line: { color: AMBER_COLOR, width: 1 }, rectRadius: 0.1
+  });
+  slide.addText(etiquetaEstado, {
+    x: 10.7, y: 0.45, w: 1.9, h: 0.5,
+    fontSize: 13, bold: true, color: BG_COLOR, align: 'center', fontFace: 'Arial'
+  });
+
+  slide.addText(bloques, {
+    x: 0.8, y: 1.5, w: 11.4, h: 4.8,
+    fontSize: 15, fontFace: 'Arial', lineSpacing: 20
+  });
+  return slide;
+}
+
+// --- Slide DIVISOR de sección ---
+const sDiv = pptx.addSlide();
+sDiv.background = { fill: BG_COLOR };
+sDiv.addText('Lo Nuevo en Esta Versión', {
+  x: 1.0, y: 2.2, w: 11.3, h: 1.0,
+  fontSize: 40, fontFace: 'Trebuchet MS', bold: true, color: AMBER_COLOR
+});
+sDiv.addShape(pptx.shapes.RECTANGLE, { x: 1.0, y: 3.25, w: 6.0, h: 0.04, fill: { color: AMBER_COLOR } });
+sDiv.addText('Mismo sistema, ahora mucho más usable para la Gerencia y los jefes de área', {
+  x: 1.0, y: 3.5, w: 11.0, h: 0.6, fontSize: 18, fontFace: 'Arial', color: WHITE_COLOR
+});
+sDiv.addText('Inicio en vivo · Alertas automáticas · Productividad por persona · Reportes ejecutivos · Mayor confiabilidad', {
+  x: 1.0, y: 4.3, w: 11.0, h: 0.6, fontSize: 13, fontFace: 'Arial', color: GRAY_COLOR
+});
+sDiv.addNotes(
+  "Desde la última vez que les mostré el sistema, el foco de este ciclo fue uno solo: que la herramienta sea más fácil y útil en el día a día. No agregamos complejidad; agregamos claridad. Les muestro las cinco mejoras más importantes."
+);
+
+// --- NOVEDAD 1: Inicio rediseñado para Gerencia ---
+crearSlideNovedad(
+  'Inicio Rediseñado: el Tablero del Gerente',
+  'NUEVO',
+  [
+    { text: 'Rediseñamos la pantalla de inicio para que responda en 5 segundos las preguntas del gerente: ', options: { color: WHITE_COLOR } },
+    { text: '¿cuánta plata tengo en juego y cuánto falta cobrar? ¿qué se entrega pronto? ¿quién hizo qué?\n\n', options: { bold: true, color: AMBER_COLOR } },
+    { text: '• 4 indicadores de un vistazo: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'Proyectos activos · Avance de producción · Plata en proyectos (cobrado vs. por cobrar) · Entregas y retrasos.\n', options: { color: WHITE_COLOR } },
+    { text: '• Lenguaje de planta, no técnico: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: '"Lo que toca entregar pronto (los retrasados primero)", "¿En qué etapa está cada proyecto?".\n', options: { color: WHITE_COLOR } },
+    { text: '• La tarjeta de retrasos se pinta de rojo sola ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'cuando hay proyectos vencidos: la gerencia ve el problema sin buscarlo.', options: { color: WHITE_COLOR } }
+  ],
+  "El inicio dejó de ser un panel técnico para convertirse en el tablero de mando del gerente. Cobrado contra por cobrar, entregas ordenadas con los retrasados arriba, y todo en lenguaje de planta. Si hay un proyecto retrasado, la tarjeta se pone roja sola: no hay que ir a buscar el problema, el problema salta a la vista."
+);
+
+// --- NOVEDAD 2: Command Center en tiempo real ---
+crearSlideNovedad(
+  'Centro de Control en Vivo (Tiempo Real de Verdad)',
+  'MEJORADO',
+  [
+    { text: 'Antes el tablero se refrescaba cada 10 segundos. Ahora la actividad llega ', options: { color: WHITE_COLOR } },
+    { text: 'al instante, empujada desde la base de datos', options: { bold: true, color: AMBER_COLOR } },
+    { text: ' (WebSockets), con el refresco periódico solo como respaldo.\n\n', options: { color: WHITE_COLOR } },
+    { text: '• Aviso imposible de ignorar: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'cada acción nueva entra con un destello dorado y un sonido sutil de campana.\n', options: { color: WHITE_COLOR } },
+    { text: '• Filtros instantáneos: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'por área (Comercial, Ingeniería, Logística…), por tipo de acción (firmas, metrado, pagos, documentos) y búsqueda libre por usuario, cliente o PR.\n', options: { color: WHITE_COLOR } },
+    { text: '• Tags clicables: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'desde cualquier evento se salta directo al proyecto involucrado.', options: { color: WHITE_COLOR } }
+  ],
+  "Esta es la mejora que más se siente. El feed ya no espera 10 segundos: en cuanto alguien firma una etapa o registra un pago, aparece al instante con un destello y un sonido suave. La gerencia puede tener esta pantalla abierta y enterarse de todo lo que pasa en la planta sin hacer una sola llamada."
+);
+
+// --- NOVEDAD 3: Alertas automáticas de vencimiento ---
+crearSlideNovedad(
+  'Alertas Automáticas de Vencimiento (Robot Diario)',
+  'NUEVO',
+  [
+    { text: 'El sistema ahora vigila los plazos por su cuenta. ', options: { color: WHITE_COLOR } },
+    { text: 'Todos los días a las 8:00 a.m. (hora Lima)', options: { bold: true, color: AMBER_COLOR } },
+    { text: ' un proceso automático revisa cada proyecto y avisa antes de que sea tarde.\n\n', options: { color: WHITE_COLOR } },
+    { text: '• Avisa al área correcta: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'la alerta llega al rol dueño de la etapa que está frenando el proyecto, no a todos por igual.\n', options: { color: WHITE_COLOR } },
+    { text: '• Margen configurable: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'desde Configuración se define con cuántos días de anticipación avisar (por defecto 7).\n', options: { color: WHITE_COLOR } },
+    { text: '• Sin spam: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'cada alerta se manda una sola vez. Si se reprograma la entrega, el sistema se reinicia y puede volver a avisar si vuelve a acercarse el plazo.', options: { color: WHITE_COLOR } }
+  ],
+  "Antes, un retraso se descubría cuando ya era tarde. Ahora hay un robot que cada mañana revisa los plazos y avisa con anticipación, pero con criterio: le habla solo al área responsable de la etapa atascada, una sola vez, y con los días de margen que la gerencia configure. Si se mueve la fecha de entrega, el aviso se reinicia automáticamente."
+);
+
+// --- NOVEDAD 4: Productividad por persona ---
+crearSlideNovedad(
+  'Productividad del Equipo (Avance, no Presencia)',
+  'NUEVO',
+  [
+    { text: 'Un panel nuevo que responde "¿quién está moviendo el trabajo?" midiendo ', options: { color: WHITE_COLOR } },
+    { text: 'avance real, no horas frente a la pantalla.\n\n', options: { bold: true, color: AMBER_COLOR } },
+    { text: '• Hitos de valor vs. rutina: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'separa las acciones que mueven la aguja (firmas de etapa, importar metrado, compras, avance de producción, crear proyectos, subir documentos) del trabajo rutinario.\n', options: { color: WHITE_COLOR } },
+    { text: '• Detección de inactividad: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'quien no registró movimientos en el período aparece marcado en rojo.\n', options: { color: WHITE_COLOR } },
+    { text: '• Rangos rápidos: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'Hoy · 7 días · 30 días, por persona y por área.', options: { color: WHITE_COLOR } }
+  ],
+  "Este panel mide avance del trabajo, no presencia: cuenta los hitos que de verdad mueven un proyecto. Distingue una firma de etapa o una compra de una simple edición rutinaria, y marca en rojo a quien no tuvo movimientos. Es una herramienta de gestión justa, basada en resultados visibles en el sistema."
+);
+
+// --- NOVEDAD 5: Reportes ampliados + Confiabilidad ---
+crearSlideNovedad(
+  'Reportes Ejecutivos y Mayor Confiabilidad',
+  'MEJORADO',
+  [
+    { text: '• Reportes en 3 pestañas: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'General (estado y avance), Financiero (montos, cobrado, por cobrar) y Responsables (rendimiento por persona), con filtros y exportación a Excel y PDF.\n\n', options: { color: WHITE_COLOR } },
+    { text: '• Interfaz más limpia: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'consolidamos el menú lateral y quitamos pantallas sueltas para que nadie se pierda.\n\n', options: { color: WHITE_COLOR } },
+    { text: '• Confiabilidad bajo presión: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'corregimos una condición de carrera que podía sobrescribir cambios cuando dos áreas trabajaban a la vez. Hoy el último estado siempre es el correcto.\n\n', options: { color: WHITE_COLOR } },
+    { text: '• Validaciones y avisos cruzados: ', options: { bold: true, color: AMBER_COLOR } },
+    { text: 'plazos sin valores negativos, y Logística se entera del metrado aunque lo cargue un administrador.', options: { color: WHITE_COLOR } }
+  ],
+  "Cerramos con dos frentes. Primero, reportes de nivel gerencial en tres pestañas, exportables a Excel y PDF para reuniones de directorio. Y segundo, confiabilidad: corregimos un caso en que dos áreas trabajando al mismo tiempo podían pisarse los cambios. Hoy el sistema garantiza que el estado final siempre sea el correcto, incluso bajo uso intenso."
+);
 
 
 // ==========================================
