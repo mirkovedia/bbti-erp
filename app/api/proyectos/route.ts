@@ -73,6 +73,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
+    if (typeof body.cliente !== 'string' || !body.cliente.trim()) {
+      return NextResponse.json({ error: 'El cliente es requerido', code: 'VALIDATION_ERROR' }, { status: 400 });
+    }
+
     // Generar ID tipo PREFIX-01-2024 a partir del máximo correlativo del año
     // (evita colisiones tras borrados; count+1 reutilizaría IDs ya existentes)
     const { data: configData } = await supabase
@@ -134,28 +138,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Registrar en la bitácora general de Command Center
-    await registrarActividad({
-      proyectoId: id,
-      cliente: body.cliente,
-      usuario: userData?.nombre || 'Sistema',
-      rol: rol || 'Sistema',
-      accion: 'creacion',
-      detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
-    });
-
-    // Create related records
-    if (body.fecha_entrega || body.dias_plazo || body.adelanto) {
-      await supabase.from('proyecto_comercial').insert({
-        proyecto_id: id,
-        fecha_entrega: body.fecha_entrega || null,
-        dias_plazo: body.dias_plazo || null,
-        adelanto: body.adelanto || 0,
-        metrado: body.metrado || '',
-      });
-    }
-
-    // Create default production stages (flujo de fabricación de tableros)
+    // Default production stages (flujo de fabricación de tableros)
     const etapasDefault = [
       'Habilitación de material',
       'Área de Corte',
@@ -166,35 +149,50 @@ export async function POST(request: Request) {
       'Área de Ensamblaje',
     ];
 
-    await supabase.from('proyecto_etapas').insert(
-      etapasDefault.map((nombre, i) => ({
+    // Las sub-tablas y la bitácora son independientes entre sí (solo dependen
+    // del proyecto ya insertado): escribir en paralelo en vez de en serie.
+    await Promise.all([
+      registrarActividad({
+        proyectoId: id,
+        cliente: body.cliente,
+        usuario: userData?.nombre || 'Sistema',
+        rol: rol || 'Sistema',
+        accion: 'creacion',
+        detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
+      }),
+      body.fecha_entrega || body.dias_plazo || body.adelanto
+        ? supabase.from('proyecto_comercial').insert({
+            proyecto_id: id,
+            fecha_entrega: body.fecha_entrega || null,
+            dias_plazo: body.dias_plazo || null,
+            adelanto: body.adelanto || 0,
+            metrado: body.metrado || '',
+          })
+        : Promise.resolve(null),
+      supabase.from('proyecto_etapas').insert(
+        etapasDefault.map((nombre, i) => ({
+          proyecto_id: id,
+          nombre,
+          orden: i + 1,
+          estado: 'PENDIENTE',
+        }))
+      ),
+      supabase.from('proyecto_ingenieria').insert({
         proyecto_id: id,
-        nombre,
-        orden: i + 1,
-        estado: 'PENDIENTE',
-      }))
-    );
-
-    // Create ingenieria record
-    await supabase.from('proyecto_ingenieria').insert({
-      proyecto_id: id,
-      estado_planos: 'Solicitud de planos',
-    });
-
-    // Create produccion record
-    await supabase.from('proyecto_produccion').insert({
-      proyecto_id: id,
-      progreso: 0,
-      pruebas: false,
-      envio: false,
-    });
-
-    // Create finanzas record
-    await supabase.from('proyecto_finanzas').insert({
-      proyecto_id: id,
-      adelanto: body.adelanto || 0,
-      porcentaje: 0,
-    });
+        estado_planos: 'Solicitud de planos',
+      }),
+      supabase.from('proyecto_produccion').insert({
+        proyecto_id: id,
+        progreso: 0,
+        pruebas: false,
+        envio: false,
+      }),
+      supabase.from('proyecto_finanzas').insert({
+        proyecto_id: id,
+        adelanto: body.adelanto || 0,
+        porcentaje: 0,
+      }),
+    ]);
 
     await notificar({
       proyectoId: id,

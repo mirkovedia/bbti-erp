@@ -46,5 +46,6 @@ expect(trasLeer.unreadCount === 0, '⑤ marcar-leidas → unreadCount 0');
 
 // Limpieza (cascada borra notificaciones)
 await svc.from('proyectos').delete().eq('id', id);
+await svc.from('actividad_log').delete().eq('proyecto_id', id); // la bitácora no tiene FK: limpiar aparte
 console.log(`\n===== ${pass} OK / ${fail} fallos ===== (limpiado ${id})`);
 process.exit(fail ? 1 : 0);

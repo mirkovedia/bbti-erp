@@ -39,12 +39,13 @@ await page.waitForTimeout(1500);
 const sigueEnLista = await page.locator('tr', { hasText: proy.id }).count();
 ok(sigueEnLista === 0, 'tras eliminar, la fila desaparece de la lista');
 
-// 4) realmente borrado en la BD
-const { data } = await svc.from('proyectos').select('id').eq('id', proy.id);
-ok((data ?? []).length === 0, 'proyecto borrado en la base de datos');
+// 4) borrado SUAVE en la BD (papelera, migración 010): la fila queda con activo=false
+const { data } = await svc.from('proyectos').select('id, activo').eq('id', proy.id);
+ok((data ?? []).length === 1 && data[0].activo === false, 'proyecto en papelera (activo=false, recuperable)');
 
 // limpieza por si quedó algo
 await svc.from('proyectos').delete().eq('id', proy.id);
+await svc.from('actividad_log').delete().eq('proyecto_id', proy.id);
 console.log(`\n===== ${pass} OK / ${fail} fallos =====`);
 await browser.close();
 process.exit(fail ? 1 : 0);

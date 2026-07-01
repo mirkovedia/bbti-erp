@@ -49,7 +49,10 @@ ok(aliveAfter === true, 'hilo responde tras crear');
 
 // limpieza
 const { data } = await svc.from('proyectos').select('id').eq('cliente', 'VERIFY MODAL SAC');
-for (const p of data ?? []) await svc.from('proyectos').delete().eq('id', p.id);
+for (const p of data ?? []) {
+  await svc.from('proyectos').delete().eq('id', p.id);
+  await svc.from('actividad_log').delete().eq('proyecto_id', p.id);
+}
 
 console.log(`\n[MODAL] render start contados: ${modalRenders} (debe ser pocos, NO cientos)`);
 console.log(`===== ${pass} OK / ${fail} fallos =====`);

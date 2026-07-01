@@ -28,10 +28,16 @@ export default function DashboardLayout({
         return;
       }
 
-      // Cargar permisos de roles desde la base de datos
-      const { data: permsData } = await supabase
-        .from('role_permissions')
-        .select('*');
+      // Permisos, configuración y perfil no dependen entre sí: en paralelo (1 RTT en vez de 3)
+      const yaCargado = !!user && user.id === authUser.id;
+      const [{ data: permsData }, { data: configData }, userRes] = await Promise.all([
+        supabase.from('role_permissions').select('rol, permissions'),
+        supabase.from('company_config').select('moneda, igv').limit(1).maybeSingle(),
+        // Si ya tenemos en memoria al usuario correcto, no recargamos el perfil.
+        yaCargado
+          ? Promise.resolve(null)
+          : supabase.from('users').select('*').eq('id', authUser.id).single(),
+      ]);
 
       if (permsData && permsData.length > 0) {
         const permsMap = permsData.reduce<Record<string, Permissions>>((acc, row) => {
@@ -41,13 +47,6 @@ export default function DashboardLayout({
         useAppStore.getState().setRolePermissions(permsMap as Record<Rol, Permissions>);
       }
 
-      // Cargar configuración de la empresa (moneda, igv)
-      const { data: configData } = await supabase
-        .from('company_config')
-        .select('moneda, igv')
-        .limit(1)
-        .maybeSingle();
-
       if (configData) {
         useAppStore.getState().setCompanyConfig(
           configData.moneda || 'S/',
@@ -55,18 +54,8 @@ export default function DashboardLayout({
         );
       }
 
-      // Si ya tenemos en memoria al usuario correcto, no recargamos el perfil.
-      if (user && user.id === authUser.id) return;
-
-      // Usuario distinto (o primer login): cargamos sus datos frescos.
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (userData) {
-        setUser(userData);
+      if (userRes?.data) {
+        setUser(userRes.data);
       }
     };
 

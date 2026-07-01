@@ -39,7 +39,7 @@ export default function LoginPage() {
       {/* Panel de marca */}
       <div className="hidden md:flex md:w-1/2 relative flex-col justify-between p-12 overflow-hidden">
         {/* Fondo de marca (degradado petróleo) + overlay para legibilidad */}
-        <Image src="/login-bg.png" alt="" fill priority className="object-cover" />
+        <Image src="/login-bg.png" alt="" fill priority sizes="(min-width: 768px) 50vw, 0px" className="object-cover" />
         <div className="absolute inset-0 bg-[var(--brand-teal)]/55" />
         <div className="relative z-10">
           <Image src="/bbti-logo.png" alt="BBTI" width={180} height={44} priority className="h-11 w-auto" />

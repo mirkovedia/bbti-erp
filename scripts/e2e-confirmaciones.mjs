@@ -49,16 +49,30 @@ expect(await getEstado(id) === 'COMPRAS EN CURSO', '⑦ deshacer logística (cas
 const { data: restantes } = await svc.from('proyecto_confirmaciones').select('etapa').eq('proyecto_id', id);
 expect(restantes.length === 1 && restantes[0].etapa === 'ingenieria', '⑦ solo queda ingeniería firmada');
 
-// ⑧ Permisos: rol Logística NO puede confirmar Producción
-//   (rehacer logística como admin, luego intentar producción con cookie de logística)
+// ⑧ Permisos: un rol SIN canEditProduccion no puede confirmar Producción.
+//   Los permisos son editables desde la UI (role_permissions), así que se elige
+//   dinámicamente un rol que HOY no tenga ese permiso.
 await confirmar(id, 'logistica');
-const cookieLog = await getAuthCookie('logistica@bbti.com.pe', 'carlosr');
-const r8 = await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH',
-  headers: { 'Content-Type': 'application/json', cookie: cookieLog },
-  body: JSON.stringify({ confirmarEtapa: { etapa: 'produccion' } }) });
-expect(r8.status === 403, '⑧ rol Logística confirma Producción → 403');
+const CANDIDATOS_403 = [
+  { email: 'jflores@bbti.com.pe', pass: 'jflores03', rol: 'Comercial' },
+  { email: 'ingenieria@bbti.com.pe', pass: 'goscco', rol: 'Ingeniería' },
+  { email: 'logistica@bbti.com.pe', pass: 'carlosr', rol: 'Logística' },
+];
+const { data: permRows } = await svc.from('role_permissions').select('rol, permissions');
+const permsDe = (rol) => permRows?.find((r) => r.rol === rol)?.permissions ?? {};
+const negado = CANDIDATOS_403.find((c) => !permsDe(c.rol).canEditProduccion);
+if (negado) {
+  const cookieNeg = await getAuthCookie(negado.email, negado.pass);
+  const r8 = await fetch(`${BASE}/api/proyectos/${id}`, { method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', cookie: cookieNeg },
+    body: JSON.stringify({ confirmarEtapa: { etapa: 'produccion' } }) });
+  expect(r8.status === 403, `⑧ rol ${negado.rol} confirma Producción → 403`);
+} else {
+  console.log('⚠ todos los roles candidatos tienen canEditProduccion — test ⑧ omitido');
+}
 
 // Limpieza
 await svc.from('proyectos').delete().eq('id', id);
+await svc.from('actividad_log').delete().eq('proyecto_id', id); // la bitácora no tiene FK: limpiar aparte
 console.log(`\n===== ${pass} OK / ${fail} fallos ===== (limpiado ${id})`);
 process.exit(fail ? 1 : 0);

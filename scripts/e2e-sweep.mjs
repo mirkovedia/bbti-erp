@@ -8,12 +8,12 @@ const NOISE = ['Failed to fetch', 'NetworkError', 'aborted', 'net::ERR_ABORTED']
 const isNoise = (t) => NOISE.some((n) => t.includes(n));
 
 const rutas = [
+  { path: '/', name: 'Inicio (command center)' },
   { path: '/proyectos', name: 'Proyectos (lista)' },
   { path: '/proyectos/PR-01-2026', name: 'Proyecto detalle' },
   { path: '/calendario', name: 'Calendario' },
   { path: '/reportes', name: 'Reportes' },
-  { path: '/alertas', name: 'Alertas' },
-  { path: '/documentos', name: 'Documentos' },
+  { path: '/productividad', name: 'Productividad' },
   { path: '/usuarios', name: 'Usuarios' },
   { path: '/configuracion', name: 'Configuración' },
 ];

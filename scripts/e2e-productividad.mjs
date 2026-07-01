@@ -21,10 +21,23 @@ await svc.from('actividad_log').insert([
   { proyecto_id: tag, cliente: 'PROBE', usuario: NOMBRE, rol: 'Ingeniería', accion: 'comentario', detalle: 'comentó (probe)' },
 ]);
 
-// 0) sin permiso (Logística no tiene canViewReports) → 403
-const cookieLog = await getAuthCookie('logistica@bbti.com.pe', 'carlosr');
-const r403 = await fetch(`${BASE}/api/productividad`, { headers: { cookie: cookieLog } });
-check(r403.status === 403, `Logística (sin canViewReports) → 403 (${r403.status})`);
+// 0) sin permiso → 403. Los permisos son EDITABLES desde la UI (role_permissions),
+//    así que elegimos dinámicamente un rol que HOY no tenga canViewReports.
+const CANDIDATOS_403 = [
+  { email: 'ingenieria@bbti.com.pe', pass: 'goscco', rol: 'Ingeniería' },
+  { email: 'produccion@bbti.com.pe', pass: 'anat', rol: 'Producción' },
+  { email: 'logistica@bbti.com.pe', pass: 'carlosr', rol: 'Logística' },
+];
+const { data: permRows } = await svc.from('role_permissions').select('rol, permissions');
+const permsDe = (rol) => permRows?.find((r) => r.rol === rol)?.permissions ?? {};
+const sinReporte = CANDIDATOS_403.find((c) => !permsDe(c.rol).canViewReports);
+if (sinReporte) {
+  const cookieSin = await getAuthCookie(sinReporte.email, sinReporte.pass);
+  const r403 = await fetch(`${BASE}/api/productividad`, { headers: { cookie: cookieSin } });
+  check(r403.status === 403, `${sinReporte.rol} (sin canViewReports) → 403 (${r403.status})`);
+} else {
+  console.log('⚠ todos los roles candidatos tienen canViewReports — test 403 omitido');
+}
 
 // 1) admin (canViewReports) → 200 + estructura
 const cookie = await getAuthCookie('admin@bbti.com.pe', 'admin2024');

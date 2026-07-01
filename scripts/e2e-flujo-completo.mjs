@@ -150,6 +150,7 @@ try {
   fail++;
 } finally {
   await serviceClient().from('proyectos').delete().eq('id', projId);
+  await serviceClient().from('actividad_log').delete().eq('proyecto_id', projId);
   await browser.close();
   log(`\n(limpiado ${projId})`);
   log(`===== ${pass} OK / ${fail} fallos =====`);

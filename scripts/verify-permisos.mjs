@@ -65,4 +65,5 @@ console.log(`\n===== ${pass} OK / ${fail} fallos =====`);
 await browser.close();
 // limpieza
 await svc.from('proyectos').delete().eq('id', pid);
+await svc.from('actividad_log').delete().eq('proyecto_id', pid);
 process.exit(fail ? 1 : 0);

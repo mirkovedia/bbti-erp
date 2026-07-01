@@ -105,7 +105,6 @@ export default function ProyectosPage() {
         return <ProgressBar value={prog} className="w-24" />;
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
   const debouncedSearch = useDebounce(search);

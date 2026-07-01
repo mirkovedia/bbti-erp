@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { fm, tiempoRelativo, fechaHora, diasRestantes } from '@/lib/utils/format';
-import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Proyecto, EstadoProyecto } from '@/types';
 import { cn } from '@/lib/utils';

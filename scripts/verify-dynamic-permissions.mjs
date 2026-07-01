@@ -75,8 +75,8 @@ try {
 
   // Limpieza de datos
   console.log('\nLimpiando proyectos de prueba de la base de datos...');
-  if (pid1) await svc.from('proyectos').delete().eq('id', pid1);
-  if (pid3) await svc.from('proyectos').delete().eq('id', pid3);
+  if (pid1) { await svc.from('proyectos').delete().eq('id', pid1); await svc.from('actividad_log').delete().eq('proyecto_id', pid1); }
+  if (pid3) { await svc.from('proyectos').delete().eq('id', pid3); await svc.from('actividad_log').delete().eq('proyecto_id', pid3); }
   console.log('Limpieza completada.');
 
 } catch (err) {

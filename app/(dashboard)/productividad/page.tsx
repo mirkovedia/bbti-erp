@@ -63,14 +63,14 @@ export default function ProductividadPage() {
   }, []);
 
   useEffect(() => {
-    if (!puedeVer) {
-      setLoading(false);
-      return;
-    }
+    if (!puedeVer) return;
     // setState tras await (deferido): falso positivo de set-state-in-effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData(presetDias);
   }, [puedeVer, presetDias, fetchData]);
+
+  // Sin permiso no hay fetch que esperar: derivar en vez de setState síncrono en el efecto.
+  const cargando = loading && puedeVer;
 
   if (user && !puedeVer) {
     return (
@@ -127,7 +127,7 @@ export default function ProductividadPage() {
 
       {/* Tabla */}
       <div className="bg-[var(--navy2)] rounded-xl border border-slate-800 overflow-hidden">
-        {loading ? (
+        {cargando ? (
           <div className="p-12 text-center">
             <Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-500" />
           </div>
