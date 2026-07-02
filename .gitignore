@@ -52,3 +52,7 @@ next-env.d.ts
 # material interno (pitch, guiones) — vive en ../privado-no-subir
 *.pptx
 docs/guion-*
+
+# paquetes del consultor externo (contienen host RDS real y keys parciales — NO subir)
+/bbti-erp-cambios-especificos/
+/bbti-erp-consultor-docker-rds-r2/

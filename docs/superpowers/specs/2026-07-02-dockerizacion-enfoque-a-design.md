@@ -1,7 +1,7 @@
 # Dockerización BBTI ERP — Enfoque A (monolito Next.js)
 
 **Fecha:** 2026-07-02
-**Estado:** Aprobado por el usuario. Pendiente respuesta del ingeniero sobre NestJS (ver "Decisión pendiente").
+**Estado:** SUPERSEDED — reemplazado por `2026-07-02-migracion-docker-rds-r2-design.md` (fusión con el paquete del consultor externo: puerto 3006 plano sin Traefik, mismo núcleo Prisma/JWT/R2/cron).
 **Origen:** Observaciones del ingeniero de infraestructura (WhatsApp, 2026-07-02).
 
 ## Contexto
