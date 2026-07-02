@@ -210,7 +210,7 @@ Cero cambios de código entre local y RDS.
 
 **Se elimina todo lo Supabase-specific de las migraciones:** `auth.uid()`, políticas RLS, roles `anon/authenticated`, `storage.objects`, publication de Realtime (014). La seguridad no se degrada: toda autorización ya se revalida server-side en las rutas API con la matriz de permisos (`PERMS` + `role_permissions` dinámica); esa capa queda intacta.
 
-**Cliente:** `lib/db.ts` exporta un `PrismaClient` singleton (patrón global para dev con hot-reload). Las ~48 ubicaciones con `supabase.from(...)` se reescriben a Prisma Client. La distinción anon/service-role desaparece: un solo cliente server-side. Los quirks de PostgREST (embed objeto-vs-array, `maybeSingle`) desaparecen — las relaciones Prisma son tipadas.
+**Cliente:** `lib/db.ts` exporta un `PrismaClient` singleton (patrón global para dev con hot-reload). Las queries `supabase.from(...)` repartidas en los 48 archivos que tocan Supabase (~15 rutas API, helpers, hooks, scripts) se reescriben a Prisma Client. La distinción anon/service-role desaparece: un solo cliente server-side. Los quirks de PostgREST (embed objeto-vs-array, `maybeSingle`) desaparecen — las relaciones Prisma son tipadas.
 
 **Conexión a RDS:** `?schema=gestion_proyectos` es soporte nativo de Prisma. TLS: `sslmode=require` en el URL de producción (RDS lo soporta por defecto); si el ingeniero exige verificación completa de CA, se agrega el bundle de RDS como paso documentado en el README.
 
@@ -255,7 +255,7 @@ Se conservan: estructura de paths `${proyecto_id}/archivo`, validación server d
 
 ### 8. Variables de entorno
 
-`.env.production.example` (se commitea; el `.env.production` real **nunca** — ya está en `.gitignore` y `.dockerignore`):
+`.env.production.example` (se commitea; el `.env.production` real **nunca** — ya está en `.gitignore` y `.dockerignore`). ⚠️ El `.gitignore` actual tiene `.env*`, que también ignoraría el example: agregar la excepción `!.env.production.example`.
 
 ```env
 NODE_ENV=production
