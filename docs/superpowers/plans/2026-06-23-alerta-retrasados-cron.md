@@ -204,7 +204,7 @@ git commit -m "feat: migracion 015 tabla dedup de alertas + tipo vencimiento en 
 
 - [ ] **Step 5: Aplicar la migración en Supabase (acción del usuario)**
 
-Pegar el contenido de `supabase/migrations/015_alertas_vencimiento.sql` en el SQL Editor de Supabase (proyecto `fugaqtandzdgjdhlpwae`) y ejecutarlo. Verificar que la tabla `proyecto_alertas_enviadas` aparezca en el Table Editor. **El endpoint y el e2e de la Task 3 requieren esta tabla aplicada.**
+Pegar el contenido de `supabase/migrations/015_alertas_vencimiento.sql` en el SQL Editor de Supabase (proyecto `<project-ref>`) y ejecutarlo. Verificar que la tabla `proyecto_alertas_enviadas` aparezca en el Table Editor. **El endpoint y el e2e de la Task 3 requieren esta tabla aplicada.**
 
 ---
 
@@ -225,7 +225,7 @@ Pegar el contenido de `supabase/migrations/015_alertas_vencimiento.sql` en el SQ
 Agregar una línea al final de `.env.local` (valor arbitrario largo; elegir uno fijo):
 
 ```
-CRON_SECRET=bbti_cron_2026_xJ8kP2mNq7wL4vR9
+CRON_SECRET=<valor-secreto-largo>   # el valor real vive solo en .env.local
 ```
 
 - [ ] **Step 2: Escribir el endpoint**

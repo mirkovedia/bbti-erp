@@ -45,3 +45,10 @@ plano_test.pdf
 next-env.d.ts
 
 .vercel
+
+# datos comerciales reales del cliente (queda en disco para tests locales, NO subir)
+/metrado.xlsx
+
+# material interno (pitch, guiones) — vive en ../privado-no-subir
+*.pptx
+docs/guion-*

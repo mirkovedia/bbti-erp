@@ -63,7 +63,7 @@ create policy "auth_write_confirmaciones" on proyecto_confirmaciones
 
 - [ ] **Step 2: Aplicar la migración en Supabase**
 
-Abrir el SQL Editor del proyecto Supabase `fugaqtandzdgjdhlpwae` y ejecutar el contenido del archivo.
+Abrir el SQL Editor del proyecto Supabase `<project-ref>` y ejecutar el contenido del archivo.
 (Es el mismo flujo manual con que se aplicó `004_documentos_estado.sql`.)
 
 - [ ] **Step 3: Verificar que la tabla existe**

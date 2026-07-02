@@ -77,7 +77,7 @@ alter publication supabase_realtime add table notificaciones;
 
 - [ ] **Step 2: Aplicar la migración en Supabase**
 
-Abrir el SQL Editor del proyecto Supabase `fugaqtandzdgjdhlpwae` y ejecutar el contenido del archivo.
+Abrir el SQL Editor del proyecto Supabase `<project-ref>` y ejecutar el contenido del archivo.
 (Mismo flujo manual con que se aplicaron `004` y `005`.)
 
 - [ ] **Step 3: Verificar que la tabla existe y el realtime quedó habilitado**

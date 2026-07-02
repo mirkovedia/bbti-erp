@@ -157,16 +157,3 @@ Dominio, certresolver y nombre de red quedan parametrizados (`${APP_DOMAIN}`, `$
 | CORS del bucket R2 | checklist explícito con el ingeniero antes del corte |
 | Historial git con secretos al publicar | re-scan antes de cambiar visibilidad |
 | Permisos del usuario de BD insuficientes para `migrate deploy` | pregunta 2/3 al ingeniero; fallback: entregarle el SQL generado (`prisma migrate diff`) |
-
----
-
-## Preguntas para el ingeniero
-
-1. **Backend:** ¿NestJS es requisito de tu plataforma, o aceptas Next.js full-stack en contenedor? El backend ya existe integrado (API routes con auth y validación server-side); separarlo agrega ~2-3 semanas.
-2. **Postgres:** ¿me pasas la connection string completa? ¿Qué versión de Postgres corre? ¿El usuario de BD tiene `CREATE` sobre el schema `gestion_proyectos`? ¿El schema ya existe o lo creo yo?
-3. **Migraciones:** ¿puedo correr `prisma migrate deploy` desde el contenedor en tu servidor, o prefieres aplicar el SQL tú mismo? (Puedo generarte el .sql)
-4. **Traefik:** ¿qué dominio/subdominio va a rutear a la app? ¿Cómo se llama la red externa de Traefik, qué entrypoint usan (websecure?) y qué certresolver?
-5. **R2:** ¿la cuenta de Cloudflare es tuya o la creamos nosotros? Necesito Account ID, Access Key/Secret y nombre del bucket. ¿Quién configura el CORS del bucket? (debe permitir PUT/GET desde el dominio de la app)
-6. **Build:** ¿clonas y compilas con `docker compose build` en tu servidor, o prefieres imagen pre-compilada en un registry (ghcr.io)? ¿Te sirve el sidecar cron o prefieres que el scheduler viva dentro del contenedor web?
-7. **Secrets:** ¿cómo inyectas variables de entorno? ¿Archivo `.env` junto al compose en el servidor?
-8. **Corte:** cuando esté desplegado en tu servidor, ¿damos de baja el deploy actual de Vercel o quieres un periodo de convivencia para validar?
