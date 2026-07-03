@@ -267,6 +267,10 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=gestion_proyect
 # Sesiones JWT (min 32 chars aleatorios)
 JWT_SECRET=
 
+# Poner "true" cuando la app esté detrás de HTTPS (activa el flag Secure de la cookie).
+# La validación del consultor es http://localhost:3006 — con Secure la cookie no viajaría.
+COOKIE_SECURE=false
+
 # Cloudflare R2 (compatible S3)
 R2_ENDPOINT_URL=https://ACCOUNT_ID.r2.cloudflarestorage.com
 R2_BUCKET=
@@ -301,9 +305,12 @@ cd bbti-erp
 cp .env.production.example .env.production
 # editar .env.production con accesos reales de RDS y R2
 docker compose up -d --build
-docker compose exec bbti-erp npx prisma migrate deploy
-docker compose exec bbti-erp npm run seed
+# Las migraciones corren solas al arranque del contenedor (start.sh → prisma migrate deploy).
+# Sembrar datos iniciales (una sola vez):
+docker compose exec bbti-erp node prisma/seed.mjs
 ```
+
+Nota técnica: la imagen runner de Next standalone no incluye npm; el CLI de Prisma se copia desde la etapa builder y `migrate deploy` se ejecuta en el arranque (`docker/start.sh`), por eso el seed corre con `node` directo.
 
 **Validación (los comandos del propio paquete del consultor):**
 
