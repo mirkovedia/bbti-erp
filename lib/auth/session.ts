@@ -27,7 +27,8 @@ export const createSessionToken = async (p: SessionPayload): Promise<string> =>
 
 export const verifySessionToken = async (token: string): Promise<SessionPayload | null> => {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    // Algoritmo fijado: evita confusión de algoritmos si esto migra a claves asimétricas
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] });
     if (!payload.sub) return null;
     return { sub: payload.sub, rol: String(payload.rol ?? ''), nombre: String(payload.nombre ?? '') };
   } catch {

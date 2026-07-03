@@ -2,6 +2,7 @@
  * Unit tests del token de sesión JWT.
  * Ejecutar: JWT_SECRET=un_secreto_de_al_menos_32_caracteres!! npx tsx scripts/test-session.ts
  */
+import { SignJWT } from 'jose';
 import { createSessionToken, verifySessionToken } from '../lib/auth/session';
 
 let pass = 0, fail = 0;
@@ -28,6 +29,14 @@ async function main() {
 
   assert((await verifySessionToken('basura')) === null, 'token malformado → null');
   assert((await verifySessionToken('')) === null, 'token vacío → null');
+
+  const hs512 = await new SignJWT({ rol: 'X', nombre: 'X' })
+    .setProtectedHeader({ alg: 'HS512' })
+    .setSubject('user-123')
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(new TextEncoder().encode(process.env.JWT_SECRET!));
+  assert((await verifySessionToken(hs512)) === null, 'token HS512 (alg no fijado) → null');
 
   console.log(`\n${pass} pass, ${fail} fail`);
   process.exit(fail > 0 ? 1 : 0);
