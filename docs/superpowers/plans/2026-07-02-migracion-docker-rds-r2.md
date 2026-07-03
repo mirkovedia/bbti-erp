@@ -128,7 +128,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: bbti
     ports:
-      - "5432:5432"
+      # 5433 en el host: la máquina de dev tiene un PostgreSQL 18 nativo ocupando 5432
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
@@ -164,7 +165,7 @@ npm install -D prisma tsx
 - [ ] **Step 4: `.env` para el CLI de Prisma** (gitignored por `.env*`; Next también lo lee)
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bbti?schema=gestion_proyectos
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/bbti?schema=gestion_proyectos
 ```
 
 - [ ] **Step 5: Escribir `prisma/schema.prisma` completo**
@@ -3406,7 +3407,7 @@ PORT=3000
 # App publicada por Docker Compose en http://<host>:3006
 
 # PostgreSQL — completar con los accesos reales de AWS RDS que envíe el ingeniero.
-# En desarrollo local: postgresql://postgres:postgres@host.docker.internal:5432/bbti?schema=gestion_proyectos
+# En desarrollo local: postgresql://postgres:postgres@host.docker.internal:5433/bbti?schema=gestion_proyectos
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=gestion_proyectos&sslmode=require
 
 # Sesiones JWT (mínimo 32 caracteres aleatorios; generar con: openssl rand -base64 48)
