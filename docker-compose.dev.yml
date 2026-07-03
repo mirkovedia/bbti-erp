@@ -1,0 +1,20 @@
+# Desarrollo local: SOLO la base de datos. La app corre con `npm run dev`.
+# Cumple la instrucción del ingeniero: desarrollar contra un Postgres propio
+# y tener scripts de migración listos; al llegar los accesos de RDS solo
+# cambia DATABASE_URL.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bbti-db-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bbti
+    ports:
+      # 5433 en el host: la máquina de dev tiene un PostgreSQL 18 nativo ocupando 5432
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
+volumes:
+  pgdata: {}
