@@ -735,7 +735,8 @@ export const createSessionToken = async (p: SessionPayload): Promise<string> =>
 
 export const verifySessionToken = async (token: string): Promise<SessionPayload | null> => {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    // Algoritmo fijado: evita confusión de algoritmos si esto migra a claves asimétricas
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] });
     if (!payload.sub) return null;
     return { sub: payload.sub, rol: String(payload.rol ?? ''), nombre: String(payload.nombre ?? '') };
   } catch {
@@ -920,7 +921,7 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (token && process.env.JWT_SECRET) {
     try {
-      await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET));
+      await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET), { algorithms: ['HS256'] });
       autenticado = true;
     } catch {
       autenticado = false; // token vencido o alterado → tratar como anónimo
