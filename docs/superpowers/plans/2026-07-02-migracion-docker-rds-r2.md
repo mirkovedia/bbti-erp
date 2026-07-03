@@ -908,7 +908,11 @@ const SESSION_COOKIE = 'bbti_session';
 export async function proxy(request: NextRequest) {
   // Los endpoints de cron se autentican con CRON_SECRET en su propio handler,
   // no con la sesión; deben saltarse el guard de redirección a /login.
-  if (request.nextUrl.pathname.startsWith('/api/cron')) {
+  // /api/health también: lo consulta el healthcheck de Docker sin sesión.
+  if (
+    request.nextUrl.pathname.startsWith('/api/cron') ||
+    request.nextUrl.pathname === '/api/health'
+  ) {
     return NextResponse.next({ request });
   }
 
