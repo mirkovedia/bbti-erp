@@ -5,6 +5,10 @@ import { createSessionToken, SESSION_COOKIE } from '@/lib/auth/session';
 
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días, igual que la expiración del JWT
 
+// Hash bcrypt válido de una cadena aleatoria: iguala el tiempo de respuesta
+// cuando el email no existe (sin esto, la latencia del 401 delata cuentas).
+const DUMMY_HASH = '$2b$10$xm.95VGqKZ8yzOGKgrcnmOdhNzUmXQYhVNXdAuBJY7MZJggZYfPVy';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -15,8 +19,10 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.users.findUnique({ where: { email } });
-    // Mensaje idéntico exista o no el usuario (no filtrar cuáles emails existen)
-    if (!user || user.activo === false || !(await bcrypt.compare(password, user.password_hash))) {
+    // Anti-enumeración: mensaje idéntico Y tiempo idéntico exista o no el usuario.
+    const hashToCheck = user && user.activo !== false ? user.password_hash : DUMMY_HASH;
+    const passwordOk = await bcrypt.compare(password, hashToCheck);
+    if (!user || user.activo === false || !passwordOk) {
       return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
     }
 
