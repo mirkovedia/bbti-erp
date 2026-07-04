@@ -907,11 +907,15 @@ const SESSION_COOKIE = 'bbti_session';
 // jose funciona en runtime edge (jsonwebtoken NO — por eso se eligió jose).
 
 export async function proxy(request: NextRequest) {
-  // Los endpoints de cron se autentican con CRON_SECRET en su propio handler,
-  // no con la sesión; deben saltarse el guard de redirección a /login.
-  // /api/health también: lo consulta el healthcheck de Docker sin sesión.
+  // Rutas que deben pasar SIN sesión:
+  // - /api/cron/*: se autentica con CRON_SECRET en su handler.
+  // - /api/health: lo consulta el healthcheck de Docker.
+  // - /api/auth/*: login/logout no tienen sesión todavía (sin este bypass,
+  //   el POST de login se redirigiría a /login y sería imposible loguearse);
+  //   /api/auth/me valida la sesión por su cuenta y responde 401 JSON.
   if (
     request.nextUrl.pathname.startsWith('/api/cron') ||
+    request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname === '/api/health'
   ) {
     return NextResponse.next({ request });
@@ -948,15 +952,25 @@ export const config = {
 };
 ```
 
-- [ ] **Step 2: Verificar**
+- [ ] **Step 2: Verificar** (incluye la verificación funcional de los endpoints de la Task 5, que el proxy Supabase bloqueaba)
 
 ```bash
 curl -si http://localhost:3000/proyectos | head -3
 # Expected: 307 → /login (sin cookie)
-curl -si http://localhost:3000/proyectos -H "Cookie: bbti_session=<token válido>" | head -3
-# Expected: 200
 curl -si http://localhost:3000/api/cron/alertas-vencimiento | head -3
 # Expected: 401 del handler (NO redirect 307) — el bypass sigue vivo
+curl -si http://localhost:3000/api/health | head -3
+# Expected: 200 (bypass de health)
+
+# Verificación completa de auth (Task 5, ahora alcanzable):
+curl -si -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@bbti.com.pe","password":"admin2024"}'
+# Expected: 200, Set-Cookie: bbti_session=...; user sin password_hash
+curl -si -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@bbti.com.pe","password":"mala"}'
+# Expected: 401 (NO 307)
+curl -si http://localhost:3000/api/auth/me -H "Cookie: bbti_session=<token>"
+# Expected: 200 con el perfil
+curl -si http://localhost:3000/proyectos -H "Cookie: bbti_session=<token>" | head -3
+# Expected: 200 (el guard acepta la sesión propia)
 ```
 
 - [ ] **Step 3: Commit**
