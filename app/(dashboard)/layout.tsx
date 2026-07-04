@@ -18,36 +18,46 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const loadData = async () => {
-      // Perfil, permisos y configuración vía API (ya no hay cliente de BD en el navegador).
-      const meRes = await fetch('/api/auth/me');
-      if (!meRes.ok) {
+      // try/catch: fetch LANZA en errores de red (supabase-js devolvía {error});
+      // sin esto, un fallo de red dejaría el loader infinito.
+      try {
+        // Perfil, permisos y configuración vía API (ya no hay cliente de BD en el navegador).
+        const meRes = await fetch('/api/auth/me');
+        if (!meRes.ok) {
+          setUser(null);
+          router.push('/login');
+          return;
+        }
+        const { user: perfil } = await meRes.json();
+
+        const yaCargado = !!user && user.id === perfil.id;
+        const [permsRes, configRes] = await Promise.all([
+          fetch('/api/role-permissions'),
+          fetch('/api/configuracion'),
+        ]);
+
+        if (permsRes.ok) {
+          const permsMap = (await permsRes.json()) as Record<Rol, Permissions>;
+          useAppStore.getState().setRolePermissions(permsMap);
+        }
+
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          useAppStore.getState().setCompanyConfig(
+            configData.moneda || 'S/',
+            Number(configData.igv) || 18
+          );
+        }
+
+        if (!yaCargado) {
+          setUser(perfil);
+        }
+      } catch (err) {
+        // Fallo de red al cargar la sesión → tratar como no autenticado
+        // (paridad con el comportamiento previo de supabase.auth.getUser).
+        console.error('Error cargando sesión:', err);
         setUser(null);
         router.push('/login');
-        return;
-      }
-      const { user: perfil } = await meRes.json();
-
-      const yaCargado = !!user && user.id === perfil.id;
-      const [permsRes, configRes] = await Promise.all([
-        fetch('/api/role-permissions'),
-        fetch('/api/configuracion'),
-      ]);
-
-      if (permsRes.ok) {
-        const permsMap = (await permsRes.json()) as Record<Rol, Permissions>;
-        useAppStore.getState().setRolePermissions(permsMap);
-      }
-
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        useAppStore.getState().setCompanyConfig(
-          configData.moneda || 'S/',
-          Number(configData.igv) || 18
-        );
-      }
-
-      if (!yaCargado) {
-        setUser(perfil);
       }
     };
 

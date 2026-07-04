@@ -22,7 +22,12 @@ export const Topbar = () => {
   const { user, setUser, sidebarCollapsed, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      // Aunque falle la red, el logout local procede (cookie expira sola)
+      console.error('Error al cerrar sesión:', err);
+    }
     setUser(null);
     router.push('/login');
   };
