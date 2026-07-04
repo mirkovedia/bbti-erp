@@ -1,50 +1,37 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { jwtVerify } from 'jose';
+
+const SESSION_COOKIE = 'bbti_session';
+// jose funciona en runtime edge (jsonwebtoken NO — por eso se eligió jose).
 
 export async function proxy(request: NextRequest) {
-  // Los endpoints de cron se autentican con CRON_SECRET en su propio handler,
-  // no con la sesión de Supabase; deben saltarse el guard de redirección a /login.
-  // El healthcheck (/api/health) tampoco requiere sesión: lo consumen Docker y monitoreo.
+  // Rutas que deben pasar SIN sesión:
+  // - /api/cron/*: se autentica con CRON_SECRET en su handler.
+  // - /api/health: lo consulta el healthcheck de Docker.
+  // - /api/auth/*: login/logout no tienen sesión todavía (sin este bypass,
+  //   el POST de login se redirigiría a /login y sería imposible loguearse);
+  //   /api/auth/me valida la sesión por su cuenta y responde 401 JSON.
   if (
     request.nextUrl.pathname.startsWith('/api/cron') ||
+    request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname === '/api/health'
   ) {
     return NextResponse.next({ request });
   }
 
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
+  let autenticado = false;
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (token && process.env.JWT_SECRET) {
+    try {
+      await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET), { algorithms: ['HS256'] });
+      autenticado = true;
+    } catch {
+      autenticado = false; // token vencido o alterado → tratar como anónimo
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  }
 
   if (
-    !user &&
+    !autenticado &&
     !request.nextUrl.pathname.startsWith('/login') &&
     request.nextUrl.pathname !== '/'
   ) {
@@ -53,7 +40,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return NextResponse.next({ request });
 }
 
 export const config = {
