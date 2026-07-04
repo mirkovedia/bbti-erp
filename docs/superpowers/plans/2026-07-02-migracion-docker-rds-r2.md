@@ -1041,7 +1041,12 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
 
 ```tsx
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      // Aunque falle la red, el logout local procede (cookie expira sola)
+      console.error('Error al cerrar sesión:', err);
+    }
     setUser(null);
     router.push('/login');
   };
@@ -1053,6 +1058,9 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
   useEffect(() => {
     const loadData = async () => {
       // Perfil, permisos y configuración vía API (ya no hay cliente de BD en el navegador).
+      // try/catch: fetch LANZA en errores de red (supabase-js devolvía {error});
+      // sin esto, un fallo de red dejaría el loader infinito.
+      try {
       const meRes = await fetch('/api/auth/me');
       if (!meRes.ok) {
         setUser(null);
@@ -1082,6 +1090,13 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
 
       if (!yaCargado) {
         setUser(perfil);
+      }
+      } catch (err) {
+        // Fallo de red al cargar la sesión → tratar como no autenticado
+        // (paridad con el comportamiento previo de supabase.auth.getUser).
+        console.error('Error cargando sesión:', err);
+        setUser(null);
+        router.push('/login');
       }
     };
 
