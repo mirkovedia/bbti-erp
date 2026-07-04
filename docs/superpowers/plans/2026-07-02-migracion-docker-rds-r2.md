@@ -927,10 +927,13 @@ export async function proxy(request: NextRequest) {
   // - /api/auth/*: login/logout no tienen sesión todavía (sin este bypass,
   //   el POST de login se redirigiría a /login y sería imposible loguearse);
   //   /api/auth/me valida la sesión por su cuenta y responde 401 JSON.
+  // Prefijos con frontera exacta ('/x' o '/x/...') para no matchear rutas
+  // hermanas futuras (p. ej. /api/authorize) — esto es el gate de seguridad.
+  const pathname = request.nextUrl.pathname;
   if (
-    request.nextUrl.pathname.startsWith('/api/cron') ||
-    request.nextUrl.pathname.startsWith('/api/auth') ||
-    request.nextUrl.pathname === '/api/health'
+    pathname === '/api/health' ||
+    pathname === '/api/cron' || pathname.startsWith('/api/cron/') ||
+    pathname === '/api/auth' || pathname.startsWith('/api/auth/')
   ) {
     return NextResponse.next({ request });
   }
