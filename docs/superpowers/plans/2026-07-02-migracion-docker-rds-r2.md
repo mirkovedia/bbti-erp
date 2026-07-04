@@ -784,6 +784,10 @@ import { createSessionToken, SESSION_COOKIE } from '@/lib/auth/session';
 
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días, igual que la expiración del JWT
 
+// Hash bcrypt válido de una cadena aleatoria (generar con:
+// node -e "console.log(require('bcryptjs').hashSync(crypto.randomUUID(), 10))")
+const DUMMY_HASH = '<hash bcrypt generado en implementación>';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -794,8 +798,12 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.users.findUnique({ where: { email } });
-    // Mensaje idéntico exista o no el usuario (no filtrar cuáles emails existen)
-    if (!user || user.activo === false || !(await bcrypt.compare(password, user.password_hash))) {
+    // Anti-enumeración: mensaje idéntico Y tiempo idéntico exista o no el usuario.
+    // Si el email no existe (o está inactivo) igual se compara contra un hash dummy —
+    // sin esto, la latencia del 401 delata qué cuentas existen (bcrypt tarda ~100ms).
+    const hashToCheck = user && user.activo !== false ? user.password_hash : DUMMY_HASH;
+    const passwordOk = await bcrypt.compare(password, hashToCheck);
+    if (!user || user.activo === false || !passwordOk) {
       return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
     }
 
@@ -826,7 +834,13 @@ import { SESSION_COOKIE } from '@/lib/auth/session';
 
 export async function POST() {
   const res = NextResponse.json({ success: true });
-  res.cookies.set(SESSION_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
+  res.cookies.set(SESSION_COOKIE, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.COOKIE_SECURE === 'true',
+    path: '/',
+    maxAge: 0,
+  });
   return res;
 }
 ```
