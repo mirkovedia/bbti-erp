@@ -1377,18 +1377,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No tienes permiso para crear proyectos' }, { status: 403 });
     }
 
-    const data = await prisma.proyectos.create({
-      data: {
-        id,
-        cliente: body.cliente,
-        fecha_creacion: new Date().toISOString().split('T')[0],
-        monto: body.monto || 0,
-        usuario_id: session.sub,
-        usuario_nombre: userData?.nombre || 'Sistema',
-        estado: 'EN INGENIERÍA', // el estado es automático; un proyecto nuevo arranca en Ingeniería
-      },
-    });
-
     const etapasDefault = [
       'Habilitación de material',
       'Área de Corte',
@@ -1399,34 +1387,62 @@ export async function POST(request: Request) {
       'Área de Ensamblaje',
     ];
 
-    // Sub-tablas y bitácora independientes entre sí → en paralelo
-    await Promise.all([
-      registrarActividad({
-        proyectoId: id,
-        cliente: body.cliente,
-        usuario: userData?.nombre || 'Sistema',
-        rol: rol || 'Sistema',
-        accion: 'creacion',
-        detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
-      }),
-      body.fecha_entrega || body.dias_plazo || body.adelanto
-        ? prisma.proyecto_comercial.create({
-            data: {
-              proyecto_id: id,
-              fecha_entrega: body.fecha_entrega || null,
-              dias_plazo: body.dias_plazo || null,
-              adelanto: body.adelanto || 0,
-              metrado: body.metrado || '',
-            },
-          })
-        : Promise.resolve(null),
-      prisma.proyecto_etapas.createMany({
-        data: etapasDefault.map((nombre, i) => ({ proyecto_id: id, nombre, orden: i + 1, estado: 'PENDIENTE' })),
-      }),
-      prisma.proyecto_ingenieria.create({ data: { proyecto_id: id, estado_planos: 'Solicitud de planos' } }),
-      prisma.proyecto_produccion.create({ data: { proyecto_id: id, progreso: 0, pruebas: false, envio: false } }),
-      prisma.proyecto_finanzas.create({ data: { proyecto_id: id, adelanto: body.adelanto || 0, porcentaje: 0 } }),
-    ]);
+    // Transacción: si falla una sub-tabla no quedan filas parciales.
+    let data;
+    try {
+      data = await prisma.$transaction(async (tx) => {
+        const proyecto = await tx.proyectos.create({
+          data: {
+            id,
+            cliente: body.cliente,
+            fecha_creacion: new Date().toISOString().split('T')[0],
+            monto: body.monto || 0,
+            usuario_id: session.sub,
+            usuario_nombre: userData?.nombre || 'Sistema',
+            estado: 'EN INGENIERÍA', // el estado es automático; un proyecto nuevo arranca en Ingeniería
+          },
+        });
+        await Promise.all([
+          body.fecha_entrega || body.dias_plazo || body.adelanto
+            ? tx.proyecto_comercial.create({
+                data: {
+                  proyecto_id: id,
+                  fecha_entrega: body.fecha_entrega || null,
+                  dias_plazo: body.dias_plazo || null,
+                  adelanto: body.adelanto || 0,
+                  metrado: body.metrado || '',
+                },
+              })
+            : Promise.resolve(null),
+          tx.proyecto_etapas.createMany({
+            data: etapasDefault.map((nombre, i) => ({ proyecto_id: id, nombre, orden: i + 1, estado: 'PENDIENTE' })),
+          }),
+          tx.proyecto_ingenieria.create({ data: { proyecto_id: id, estado_planos: 'Solicitud de planos' } }),
+          tx.proyecto_produccion.create({ data: { proyecto_id: id, progreso: 0, pruebas: false, envio: false } }),
+          tx.proyecto_finanzas.create({ data: { proyecto_id: id, adelanto: body.adelanto || 0, porcentaje: 0 } }),
+        ]);
+        return proyecto;
+      });
+    } catch (e: unknown) {
+      // P2002 = colisión de PK: dos POST simultáneos calcularon el mismo correlativo
+      if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2002') {
+        return NextResponse.json(
+          { error: 'Conflicto al generar el ID del proyecto, intenta de nuevo', code: 'ID_CONFLICT' },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
+
+    // Bitácora fuera de la transacción: solo se registra si el proyecto se creó
+    await registrarActividad({
+      proyectoId: id,
+      cliente: body.cliente,
+      usuario: userData?.nombre || 'Sistema',
+      rol: rol || 'Sistema',
+      accion: 'creacion',
+      detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
+    });
 
     await notificar({
       proyectoId: id,
