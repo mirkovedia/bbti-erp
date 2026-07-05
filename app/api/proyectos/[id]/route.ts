@@ -1,6 +1,8 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getRolePermissionsServer } from '@/lib/auth/permissions';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
+import { getRolePermissionsServer } from '@/lib/auth/permissions-server';
 import { registrarActividad } from '@/lib/utils/actividad';
 import {
   aplicarRetraso,
@@ -14,43 +16,57 @@ import {
 import { notificar, rolesParaConfirmacion, mensajeConfirmacion, rolDelAreaDeEtapa } from '@/lib/notificaciones';
 import type { Permissions, Rol } from '@/types';
 
-// Construye el proyecto completo (todas las áreas) en consultas paralelas.
-// Se reusa en el GET y al final del PATCH, así una acción se resuelve en UN solo
-// viaje (no hace falta un GET extra después de cada cambio).
-async function buildFullProyecto(supabase: Awaited<ReturnType<typeof createClient>>, id: string) {
-  const { data: proyecto, error } = await supabase
-    .from('proyectos').select('*').eq('id', id).single();
-  if (error || !proyecto) return null;
+// Toma solo las claves permitidas de un objeto del body (tolerancia a payloads
+// con claves extra, como hacía PostgREST; Prisma lanzaría ante columnas desconocidas).
+const pick = (obj: Record<string, unknown>, keys: string[]): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) if (obj[k] !== undefined) out[k] = obj[k];
+  return out;
+};
 
-  const [comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos, confirmaciones] = await Promise.all([
-    supabase.from('proyecto_comercial').select('*').eq('proyecto_id', id).maybeSingle(),
-    supabase.from('proyecto_ingenieria').select('*').eq('proyecto_id', id).maybeSingle(),
-    supabase.from('proyecto_materiales').select('*').eq('proyecto_id', id).order('id'),
-    supabase.from('proyecto_produccion').select('*').eq('proyecto_id', id).maybeSingle(),
-    supabase.from('proyecto_etapas').select('*').eq('proyecto_id', id).order('orden'),
-    supabase.from('proyecto_finanzas').select('*').eq('proyecto_id', id).maybeSingle(),
-    supabase.from('proyecto_pagos').select('*').eq('proyecto_id', id).order('fecha'),
-    supabase.from('proyecto_comentarios').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
-    supabase.from('proyecto_observaciones').select('*').eq('proyecto_id', id).order('fecha', { ascending: false }),
-    supabase.from('proyecto_documentos').select('*').eq('proyecto_id', id).order('created_at', { ascending: false }),
-    supabase.from('proyecto_confirmaciones').select('*').eq('proyecto_id', id),
-  ]);
+const COMERCIAL_KEYS = ['fecha_entrega', 'dias_plazo', 'adelanto', 'adelanto_fijado', 'metrado', 'alerta'];
+const INGENIERIA_KEYS = ['estado_planos'];
+const PRODUCCION_KEYS = ['progreso', 'pruebas', 'envio'];
+const FINANZAS_KEYS = ['adelanto', 'fecha_adelanto', 'porcentaje', 'forma_pago', 'alerta'];
+
+// Proyecto completo (todas las áreas) en un solo query con relaciones.
+async function buildFullProyecto(id: string) {
+  const p = await prisma.proyectos.findUnique({
+    where: { id },
+    include: {
+      comercial: true,
+      ingenieria: true,
+      materiales: { orderBy: { id: 'asc' } },
+      produccion: true,
+      etapas: { orderBy: { orden: 'asc' } },
+      finanzas: true,
+      pagos: { orderBy: { fecha: 'asc' } },
+      comentarios: { orderBy: { fecha: 'desc' } },
+      observaciones: { orderBy: { fecha: 'desc' } },
+      documentos: { orderBy: { created_at: 'desc' } },
+      confirmaciones: true,
+    },
+  });
+  if (!p) return null;
+
+  const { comercial, ingenieria, materiales, produccion, etapas, finanzas, pagos, comentarios, observaciones, documentos, confirmaciones, ...proyecto } = p;
 
   const fullProyecto = {
     ...proyecto,
-    comercial: comercial.data ? { ...comercial.data, comentarios: comentarios.data || [] } : null,
-    ingenieria: ingenieria.data ? { ...ingenieria.data, observaciones: observaciones.data || [] } : null,
-    logistica: { materiales: materiales.data || [] },
-    produccion: produccion.data ? { ...produccion.data, etapas: etapas.data || [] } : null,
-    finanzas: finanzas.data ? { ...finanzas.data, pagos: pagos.data || [] } : null,
-    documentos: documentos.data || [],
-    confirmaciones: confirmaciones.data || [],
+    comercial: comercial ? { ...comercial, comentarios } : null,
+    ingenieria: ingenieria ? { ...ingenieria, observaciones } : null,
+    logistica: { materiales },
+    produccion: produccion ? { ...produccion, etapas } : null,
+    finanzas: finanzas ? { ...finanzas, pagos } : null,
+    documentos,
+    confirmaciones,
+    estado: proyecto.estado,
   };
 
   const hoy = new Date().toISOString().split('T')[0];
-  const confirmadas = new Set((confirmaciones.data ?? []).map((c) => c.etapa as EtapaFlujo));
+  const confirmadas = new Set(confirmaciones.map((c) => c.etapa as EtapaFlujo));
   const estadoBase = computeEstadoFromConfirmaciones(confirmadas);
-  fullProyecto.estado = aplicarRetraso(estadoBase, comercial.data?.fecha_entrega, hoy);
+  fullProyecto.estado = aplicarRetraso(estadoBase, comercial?.fecha_entrega, hoy);
   return fullProyecto;
 }
 
@@ -59,9 +75,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
     const { id } = await params;
-    const supabase = await createClient();
-    const full = await buildFullProyecto(supabase, id);
+    const full = await buildFullProyecto(id);
     if (!full) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
     return NextResponse.json(full);
   } catch (err) {
@@ -76,37 +94,30 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-
-    // Cargar rol del usuario para autorización server-side (fuente de verdad)
-    const { data: userData } = await supabase
-      .from('users')
-      .select('nombre, rol')
-      .eq('id', user.id)
-      .single();
-
+    const userData = await prisma.users.findUnique({
+      where: { id: session.sub },
+      select: { nombre: true, rol: true },
+    });
     const rol = userData?.rol as Rol | undefined;
-    const permsMap = await getRolePermissionsServer(supabase);
+    const permsMap = await getRolePermissionsServer();
     const can = (perm: keyof Permissions): boolean =>
       rol ? permsMap[rol]?.[perm] ?? false : false;
     const autor = userData?.nombre || 'Sistema';
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = new Date();
 
-    // Restaurar una PR de la papelera (requiere permiso de borrado)
+    // Restaurar de la papelera
     if (body.restaurar === true) {
       if (!can('canDelete')) {
         return NextResponse.json({ error: 'Sin permiso para restaurar proyectos' }, { status: 403 });
       }
-      const { error } = await supabase.from('proyectos').update({ activo: true }).eq('id', id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      const full = await buildFullProyecto(supabase, id);
+      await prisma.proyectos.update({ where: { id }, data: { activo: true } });
+      const full = await buildFullProyecto(id);
       if (full) {
         await registrarActividad({
           proyectoId: id,
@@ -120,7 +131,7 @@ export async function PATCH(
       return NextResponse.json(full ?? { success: true });
     }
 
-    // Validar que cada sección enviada cuente con su permiso antes de escribir
+    // Permiso por sección enviada
     const requiere: Array<[boolean, keyof Permissions]> = [
       [body.cliente !== undefined || body.monto !== undefined || body.estado !== undefined, 'canEdit'],
       [body.comercial !== undefined || body.addComentario !== undefined, 'canEditComercial'],
@@ -137,16 +148,12 @@ export async function PATCH(
       }
     }
 
-    // Materiales: Logística los gestiona, pero Comercial también puede escribirlos
-    // al importar el metrado (el metrado define la lista inicial de materiales).
+    // Materiales: Logística o Comercial (import de metrado)
     if (body.materiales !== undefined && !can('canEditLogistica') && !can('canEditComercial')) {
-      return NextResponse.json(
-        { error: 'Sin permiso para modificar materiales' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Sin permiso para modificar materiales' }, { status: 403 });
     }
 
-    // Confirmar una etapa del flujo (sign-off)
+    // Confirmar etapa (sign-off)
     if (body.confirmarEtapa?.etapa) {
       const etapa = body.confirmarEtapa.etapa as EtapaFlujo;
       if (!FLOW_ETAPAS.includes(etapa)) {
@@ -155,25 +162,24 @@ export async function PATCH(
       if (!permsForEtapa(etapa).some((p) => can(p))) {
         return NextResponse.json({ error: `Sin permiso para firmar ${etapa}` }, { status: 403 });
       }
-      // Revalidar readiness desde la BD (no confiar en el cliente).
-      // Incluye monto/adelanto/pagos: "Completado" exige el pago al 100%.
-      const [docsR, matsR, etpsR, confsR, currentProy, comR, pagosR] = await Promise.all([
-        supabase.from('proyecto_documentos').select('estado').eq('proyecto_id', id),
-        supabase.from('proyecto_materiales').select('estado').eq('proyecto_id', id),
-        supabase.from('proyecto_etapas').select('estado').eq('proyecto_id', id),
-        supabase.from('proyecto_confirmaciones').select('etapa').eq('proyecto_id', id),
-        supabase.from('proyectos').select('cliente, monto').eq('id', id).maybeSingle(),
-        supabase.from('proyecto_comercial').select('adelanto').eq('proyecto_id', id).maybeSingle(),
-        supabase.from('proyecto_pagos').select('monto').eq('proyecto_id', id),
+      // Revalidar readiness desde BD (incluye pago 100% para "completado")
+      const [docs, mats, etps, confs, currentProy, com, pagos] = await Promise.all([
+        prisma.proyecto_documentos.findMany({ where: { proyecto_id: id }, select: { estado: true } }),
+        prisma.proyecto_materiales.findMany({ where: { proyecto_id: id }, select: { estado: true } }),
+        prisma.proyecto_etapas.findMany({ where: { proyecto_id: id }, select: { estado: true } }),
+        prisma.proyecto_confirmaciones.findMany({ where: { proyecto_id: id }, select: { etapa: true } }),
+        prisma.proyectos.findUnique({ where: { id }, select: { cliente: true, monto: true } }),
+        prisma.proyecto_comercial.findUnique({ where: { proyecto_id: id }, select: { adelanto: true } }),
+        prisma.proyecto_pagos.findMany({ where: { proyecto_id: id }, select: { monto: true } }),
       ]);
       const ready = computeReadiness({
-        confirmaciones: confsR.data ?? [],
-        documentos: docsR.data ?? [],
-        materiales: matsR.data ?? [],
-        etapas: etpsR.data ?? [],
-        monto: currentProy.data?.monto,
-        adelanto: comR.data?.adelanto,
-        pagos: pagosR.data ?? [],
+        confirmaciones: confs,
+        documentos: docs,
+        materiales: mats,
+        etapas: etps,
+        monto: currentProy?.monto,
+        adelanto: com?.adelanto,
+        pagos,
       });
       if (!ready[etapa]) {
         return NextResponse.json(
@@ -181,13 +187,14 @@ export async function PATCH(
           { status: 409 }
         );
       }
-      await supabase.from('proyecto_confirmaciones').upsert(
-        { proyecto_id: id, etapa, confirmada_por: autor, confirmada_at: now },
-        { onConflict: 'proyecto_id,etapa' }
-      );
+      await prisma.proyecto_confirmaciones.upsert({
+        where: { proyecto_id_etapa: { proyecto_id: id, etapa } },
+        update: { confirmada_por: autor, confirmada_at: now },
+        create: { proyecto_id: id, etapa, confirmada_por: autor, confirmada_at: now },
+      });
       await registrarActividad({
         proyectoId: id,
-        cliente: currentProy.data?.cliente,
+        cliente: currentProy?.cliente,
         usuario: autor,
         rol: rol || 'Sistema',
         accion: 'firma',
@@ -198,12 +205,12 @@ export async function PATCH(
         tipo: 'confirmacion',
         mensaje: mensajeConfirmacion(etapa, id),
         rolesDestino: rolesParaConfirmacion(etapa),
-        actorId: user.id,
+        actorId: session.sub,
         actorNombre: autor,
       });
     }
 
-    // Deshacer una etapa (y las posteriores, en cascada)
+    // Deshacer etapa (cascada)
     if (body.deshacerEtapa?.etapa) {
       const etapa = body.deshacerEtapa.etapa as EtapaFlujo;
       if (!FLOW_ETAPAS.includes(etapa)) {
@@ -212,17 +219,11 @@ export async function PATCH(
       if (!permsForEtapa(etapa).some((p) => can(p))) {
         return NextResponse.json({ error: `Sin permiso para deshacer ${etapa}` }, { status: 403 });
       }
-      const { data: currentProy } = await supabase
-        .from('proyectos')
-        .select('cliente')
-        .eq('id', id)
-        .maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
 
-      await supabase
-        .from('proyecto_confirmaciones')
-        .delete()
-        .eq('proyecto_id', id)
-        .in('etapa', cascadeEtapas(etapa));
+      await prisma.proyecto_confirmaciones.deleteMany({
+        where: { proyecto_id: id, etapa: { in: cascadeEtapas(etapa) } },
+      });
 
       await registrarActividad({
         proyectoId: id,
@@ -238,67 +239,78 @@ export async function PATCH(
         tipo: 'confirmacion',
         mensaje: `Se revirtió la etapa "${etapa}" de ${id}.`,
         rolesDestino: [rolDelAreaDeEtapa(etapa)],
-        actorId: user.id,
+        actorId: session.sub,
         actorNombre: autor,
       });
     }
 
-    // Campos principales del proyecto
+    // Campos principales
     if (body.cliente !== undefined || body.monto !== undefined || body.estado !== undefined) {
       const updates: Record<string, unknown> = { updated_at: now };
       if (body.cliente !== undefined) updates.cliente = body.cliente;
       if (body.monto !== undefined) updates.monto = body.monto;
       if (body.estado !== undefined) updates.estado = body.estado;
-      await supabase.from('proyectos').update(updates).eq('id', id);
+      await prisma.proyectos.update({
+        where: { id },
+        data: updates as Prisma.proyectosUncheckedUpdateInput,
+      });
     }
 
-    // Comercial (escalares)
+    // Secciones escalares (upsert con whitelist de columnas).
+    // El cast Unchecked*Input es necesario: `pick` devuelve Record<string, unknown>
+    // y el whitelist ya garantiza que solo pasan columnas válidas.
     if (body.comercial) {
-      await supabase
-        .from('proyecto_comercial')
-        .upsert({ proyecto_id: id, ...body.comercial, updated_at: now }, { onConflict: 'proyecto_id' });
+      const data = pick(body.comercial, COMERCIAL_KEYS);
+      await prisma.proyecto_comercial.upsert({
+        where: { proyecto_id: id },
+        update: { ...data, updated_at: now } as Prisma.proyecto_comercialUncheckedUpdateInput,
+        create: { proyecto_id: id, ...data } as Prisma.proyecto_comercialUncheckedCreateInput,
+      });
     }
-
-    // Ingeniería (escalares)
     if (body.ingenieria) {
-      await supabase
-        .from('proyecto_ingenieria')
-        .upsert({ proyecto_id: id, ...body.ingenieria, updated_at: now }, { onConflict: 'proyecto_id' });
+      const data = pick(body.ingenieria, INGENIERIA_KEYS);
+      await prisma.proyecto_ingenieria.upsert({
+        where: { proyecto_id: id },
+        update: { ...data, updated_at: now } as Prisma.proyecto_ingenieriaUncheckedUpdateInput,
+        create: { proyecto_id: id, ...data } as Prisma.proyecto_ingenieriaUncheckedCreateInput,
+      });
     }
-
-    // Producción (escalares)
     if (body.produccion) {
-      await supabase
-        .from('proyecto_produccion')
-        .upsert({ proyecto_id: id, ...body.produccion, updated_at: now }, { onConflict: 'proyecto_id' });
+      const data = pick(body.produccion, PRODUCCION_KEYS);
+      await prisma.proyecto_produccion.upsert({
+        where: { proyecto_id: id },
+        update: { ...data, updated_at: now } as Prisma.proyecto_produccionUncheckedUpdateInput,
+        create: { proyecto_id: id, ...data } as Prisma.proyecto_produccionUncheckedCreateInput,
+      });
     }
-
-    // Finanzas (escalares)
     if (body.finanzas) {
-      await supabase
-        .from('proyecto_finanzas')
-        .upsert({ proyecto_id: id, ...body.finanzas, updated_at: now }, { onConflict: 'proyecto_id' });
+      const data = pick(body.finanzas, FINANZAS_KEYS);
+      await prisma.proyecto_finanzas.upsert({
+        where: { proyecto_id: id },
+        update: { ...data, updated_at: now } as Prisma.proyecto_finanzasUncheckedUpdateInput,
+        create: { proyecto_id: id, ...data } as Prisma.proyecto_finanzasUncheckedCreateInput,
+      });
     }
 
-    // Materiales — estrategia de reemplazo total del set
+    // Materiales — reemplazo total del set
     if (Array.isArray(body.materiales)) {
-      await supabase.from('proyecto_materiales').delete().eq('proyecto_id', id);
+      await prisma.proyecto_materiales.deleteMany({ where: { proyecto_id: id } });
       if (body.materiales.length > 0) {
-        await supabase.from('proyecto_materiales').insert(
-          body.materiales.map((m: Record<string, unknown>) => ({
+        await prisma.proyecto_materiales.createMany({
+          data: body.materiales.map((m: Record<string, unknown>) => ({
             proyecto_id: id,
-            nombre: m.nombre,
-            cantidad: m.cantidad ?? 0,
-            unidad: m.unidad ?? 'und',
-            comprado: m.comprado ?? 0,
-            estado: m.estado ?? 'PENDIENTE',
-            codigo: m.codigo ?? null,
-            precio_unitario: m.precio_unitario ?? 0,
-          }))
-        );
+            nombre: String(m.nombre ?? ''),
+            cantidad: Number(m.cantidad ?? 0),
+            unidad: String(m.unidad ?? 'und'),
+            comprado: Number(m.comprado ?? 0),
+            estado: String(m.estado ?? 'PENDIENTE'),
+            codigo: m.codigo != null ? String(m.codigo) : null,
+            precio_unitario: Number(m.precio_unitario ?? 0),
+          })),
+        });
       }
 
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
       if (body.comercial?.metrado) {
         const totalParsed = body.materiales.reduce(
           (acc: number, m: { cantidad: number; precio_unitario?: number }) =>
@@ -325,32 +337,31 @@ export async function PATCH(
       }
     }
 
-    // Metrado importado: avisa a Logística. Se identifica por el flag de import
-    // (body.comercial.metrado), no por el rol del actor — así también notifica
-    // cuando importa Admin, no solo Comercial. La actualización de compras de
-    // Logística (materiales sin ese flag) no dispara aviso.
+    // Metrado importado → avisa a Logística (por flag, no por rol del actor)
     if (Array.isArray(body.materiales) && body.comercial?.metrado) {
       await notificar({
         proyectoId: id,
         tipo: 'datos',
         mensaje: `${autor} importó el metrado de ${id}. Revisen las compras.`,
         rolesDestino: ['Logística'],
-        actorId: user.id,
+        actorId: session.sub,
         actorNombre: autor,
       });
     }
 
     // Estado de un documento (versión de plano)
     if (body.updateDocumento?.id) {
-      await supabase
-        .from('proyecto_documentos')
-        .update({ estado: body.updateDocumento.estado ?? null })
-        .eq('id', body.updateDocumento.id)
-        .eq('proyecto_id', id);
+      await prisma.proyecto_documentos.updateMany({
+        where: { id: body.updateDocumento.id, proyecto_id: id },
+        data: { estado: body.updateDocumento.estado ?? null },
+      });
 
-      const { data: docInfo } = await supabase.from('proyecto_documentos').select('nombre').eq('id', body.updateDocumento.id).single();
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
-      
+      const docInfo = await prisma.proyecto_documentos.findUnique({
+        where: { id: body.updateDocumento.id },
+        select: { nombre: true },
+      });
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
+
       await registrarActividad({
         proyectoId: id,
         cliente: currentProy?.cliente,
@@ -360,28 +371,30 @@ export async function PATCH(
         detalle: `actualizó el estado del plano "${docInfo?.nombre || 'plano'}" a "${body.updateDocumento.estado || 'sin estado'}"`,
       });
 
-      // Plano "Enviados a comercial" → avisa a Comercial para que revise.
       if (typeof body.updateDocumento.estado === 'string' && /enviad/i.test(body.updateDocumento.estado)) {
         await notificar({
           proyectoId: id,
           tipo: 'documento',
           mensaje: `Ingeniería envió un plano de ${id} para revisión.`,
           rolesDestino: ['Comercial'],
-          actorId: user.id,
+          actorId: session.sub,
           actorNombre: autor,
         });
       }
     }
 
-    // Etapas — actualización puntual de estado por id
+    // Etapas — actualización puntual por id
     if (Array.isArray(body.etapas)) {
       await Promise.all(
         body.etapas.map((e: { id: string; estado: string }) =>
-          supabase.from('proyecto_etapas').update({ estado: e.estado }).eq('id', e.id)
+          prisma.proyecto_etapas.updateMany({
+            where: { id: e.id, proyecto_id: id },
+            data: { estado: e.estado },
+          })
         )
       );
 
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
       await registrarActividad({
         proyectoId: id,
         cliente: currentProy?.cliente,
@@ -392,16 +405,12 @@ export async function PATCH(
       });
     }
 
-    // Nuevo comentario (Comercial)
+    // Comentario (Comercial)
     if (body.addComentario?.texto) {
-      await supabase.from('proyecto_comentarios').insert({
-        proyecto_id: id,
-        autor,
-        texto: body.addComentario.texto,
-        fecha: today,
+      await prisma.proyecto_comentarios.create({
+        data: { proyecto_id: id, autor, texto: body.addComentario.texto, fecha: today },
       });
-
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
       await registrarActividad({
         proyectoId: id,
         cliente: currentProy?.cliente,
@@ -412,16 +421,12 @@ export async function PATCH(
       });
     }
 
-    // Nueva observación (Ingeniería)
+    // Observación (Ingeniería)
     if (body.addObservacion?.texto) {
-      await supabase.from('proyecto_observaciones').insert({
-        proyecto_id: id,
-        autor,
-        texto: body.addObservacion.texto,
-        fecha: today,
+      await prisma.proyecto_observaciones.create({
+        data: { proyecto_id: id, autor, texto: body.addObservacion.texto, fecha: today },
       });
-
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
       await registrarActividad({
         proyectoId: id,
         cliente: currentProy?.cliente,
@@ -432,16 +437,17 @@ export async function PATCH(
       });
     }
 
-    // Nuevo pago adicional (Finanzas)
+    // Pago adicional (Finanzas)
     if (body.addPago?.monto !== undefined) {
-      await supabase.from('proyecto_pagos').insert({
-        proyecto_id: id,
-        descripcion: body.addPago.descripcion ?? '',
-        monto: body.addPago.monto,
-        fecha: body.addPago.fecha ?? today,
+      await prisma.proyecto_pagos.create({
+        data: {
+          proyecto_id: id,
+          descripcion: body.addPago.descripcion ?? '',
+          monto: body.addPago.monto,
+          fecha: body.addPago.fecha ?? today,
+        },
       });
-
-      const { data: currentProy } = await supabase.from('proyectos').select('cliente').eq('id', id).maybeSingle();
+      const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
       await registrarActividad({
         proyectoId: id,
         cliente: currentProy?.cliente,
@@ -452,17 +458,16 @@ export async function PATCH(
       });
     }
 
-    // Estado manual: se deriva de las firmas de etapa (no de los datos crudos).
-    const { data: confsAll } = await supabase
-      .from('proyecto_confirmaciones')
-      .select('etapa')
-      .eq('proyecto_id', id);
-    const confirmadasAll = new Set((confsAll ?? []).map((c) => c.etapa as EtapaFlujo));
+    // El estado SIEMPRE se re-deriva de las firmas
+    const confsAll = await prisma.proyecto_confirmaciones.findMany({
+      where: { proyecto_id: id },
+      select: { etapa: true },
+    });
+    const confirmadasAll = new Set(confsAll.map((c) => c.etapa as EtapaFlujo));
     const nuevoEstado = computeEstadoFromConfirmaciones(confirmadasAll);
-    await supabase.from('proyectos').update({ estado: nuevoEstado, updated_at: now }).eq('id', id);
+    await prisma.proyectos.update({ where: { id }, data: { estado: nuevoEstado, updated_at: now } });
 
-    // Devolver el proyecto YA actualizado (un solo viaje: el cliente no necesita un GET extra).
-    const full = await buildFullProyecto(supabase, id);
+    const full = await buildFullProyecto(id);
     return NextResponse.json(full ?? { success: true, estado: nuevoEstado });
   } catch (err) {
     console.error('PATCH /api/proyectos/[id] error:', err);
@@ -476,57 +481,40 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-
-    // Solo roles con permiso de borrado (Administrador, Comercial, Ingeniería)
-    const { data: userData } = await supabase
-      .from('users')
-      .select('nombre, rol')
-      .eq('id', user.id)
-      .single();
-
+    const userData = await prisma.users.findUnique({
+      where: { id: session.sub },
+      select: { nombre: true, rol: true },
+    });
     const rol = userData?.rol as Rol | undefined;
-    const permsMap = await getRolePermissionsServer(supabase);
+    const permsMap = await getRolePermissionsServer();
     if (!rol || !permsMap[rol]?.canDelete) {
       return NextResponse.json({ error: 'Sin permiso para eliminar proyectos' }, { status: 403 });
     }
 
-    const { data: proy } = await supabase
-      .from('proyectos').select('cliente').eq('id', id).maybeSingle();
+    const proy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
+    if (!proy) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
 
-    // Borrado suave: marcamos la PR como inactiva (papelera) en vez de borrarla.
-    // Así nunca se pierde y se puede restaurar.
-    const { error } = await supabase.from('proyectos').update({ activo: false }).eq('id', id);
+    // Borrado suave (papelera)
+    await prisma.proyectos.update({ where: { id }, data: { activo: false } });
 
-    if (error) {
-      return NextResponse.json(
-        { error: 'No se pudo enviar la PR a la papelera. Verifica que la migración 010 esté aplicada.' },
-        { status: 500 }
-      );
-    }
-
-    // Registrar en la bitácora general de Command Center
     await registrarActividad({
       proyectoId: id,
-      cliente: proy?.cliente,
+      cliente: proy.cliente,
       usuario: userData?.nombre || 'Sistema',
       rol: rol || 'Sistema',
       accion: 'eliminacion',
       detalle: `envió la orden de proyecto a la papelera`,
     });
 
-    // Avisar a Administración y Gerencia que se eliminó una PR (trazabilidad)
     await notificar({
       proyectoId: id,
       tipo: 'hito',
-      mensaje: `${userData?.nombre ?? 'Alguien'} (${rol}) eliminó la PR ${id}${proy?.cliente ? ` — ${proy.cliente}` : ''}.`,
+      mensaje: `${userData?.nombre ?? 'Alguien'} (${rol}) eliminó la PR ${id}${proy.cliente ? ` — ${proy.cliente}` : ''}.`,
       rolesDestino: ['Administrador', 'Gerencia General'],
-      actorId: user.id,
+      actorId: session.sub,
       actorNombre: userData?.nombre,
     });
 
