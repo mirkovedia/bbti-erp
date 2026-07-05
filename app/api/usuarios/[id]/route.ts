@@ -1,7 +1,9 @@
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { roles } from '@/lib/validations/usuario.schema';
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
+import { roles } from '@/lib/validations/usuario.schema';
 
 export async function PATCH(
   request: Request,
@@ -9,17 +11,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-    const { data: solicitante } = await supabase
-      .from('users')
-      .select('rol')
-      .eq('id', authUser.id)
-      .single();
+    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
     if (solicitante?.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
@@ -35,22 +30,25 @@ export async function PATCH(
       }
       updates.rol = body.rol;
     }
+    // Cambio de contraseña opcional (antes lo hacía el Admin API de Supabase)
+    if (typeof body.password === 'string' && body.password.length > 0) {
+      if (body.password.length < 6) {
+        return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
+      }
+      updates.password_hash = await bcrypt.hash(body.password, 10);
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });
     }
 
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('users')
-      .update(updates)
-      .eq('id', id)
-      .select('id, nombre, email, area, rol, activo')
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.users.update({
+      where: { id },
+      // updates se arma campo a campo validado arriba; el cast evita el choque
+      // Record<string, unknown> vs input tipado de Prisma.
+      data: updates as Prisma.usersUncheckedUpdateInput,
+      select: { id: true, nombre: true, email: true, area: true, rol: true, activo: true },
+    });
     return NextResponse.json(data);
   } catch (err) {
     console.error('PATCH /api/usuarios/[id] error:', err);

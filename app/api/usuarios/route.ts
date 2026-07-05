@@ -1,19 +1,20 @@
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { usuarioSchema } from '@/lib/validations/usuario.schema';
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
+import { usuarioSchema } from '@/lib/validations/usuario.schema';
+
+const SAFE_FIELDS = { id: true, nombre: true, email: true, area: true, rol: true, activo: true, created_at: true } as const;
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, nombre, email, area, rol, activo, created_at')
-      .order('created_at', { ascending: true });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.users.findMany({
+      select: SAFE_FIELDS,
+      orderBy: { created_at: 'asc' },
+    });
     return NextResponse.json(data);
   } catch (err) {
     console.error('GET /api/usuarios error:', err);
@@ -23,18 +24,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    // Verificar que el solicitante sea Administrador
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-    const { data: solicitante } = await supabase
-      .from('users')
-      .select('rol')
-      .eq('id', authUser.id)
-      .single();
+    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
     if (solicitante?.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
@@ -49,32 +42,20 @@ export async function POST(request: Request) {
     }
     const { nombre, email, area, rol, password } = parsed.data;
 
-    const admin = createAdminClient();
-
-    // Crear en auth.users
-    const { data: created, error: authError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-    if (authError || !created.user) {
-      return NextResponse.json({ error: authError?.message ?? 'Error creando usuario' }, { status: 400 });
+    const password_hash = await bcrypt.hash(password, 10);
+    try {
+      const data = await prisma.users.create({
+        data: { nombre, email: email.toLowerCase(), area, rol, activo: true, password_hash },
+        select: { id: true, nombre: true, email: true, area: true, rol: true, activo: true },
+      });
+      return NextResponse.json(data, { status: 201 });
+    } catch (e: unknown) {
+      // P2002 = unique violation (email duplicado)
+      if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2002') {
+        return NextResponse.json({ error: 'Ya existe un usuario con ese email' }, { status: 400 });
+      }
+      throw e;
     }
-
-    // Insertar en tabla users
-    const { data, error } = await admin
-      .from('users')
-      .insert({ id: created.user.id, nombre, email, area, rol, activo: true })
-      .select('id, nombre, email, area, rol, activo')
-      .single();
-
-    if (error) {
-      // Rollback del auth user si falla el insert
-      await admin.auth.admin.deleteUser(created.user.id);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data, { status: 201 });
   } catch (err) {
     console.error('POST /api/usuarios error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
