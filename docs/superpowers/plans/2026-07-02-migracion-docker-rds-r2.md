@@ -2905,11 +2905,23 @@ export async function getR2SignedUrl(key: string, expiresInSeconds = 3600, filen
 }
 
 /** URL firmada de SUBIDA (PUT) — reemplaza createSignedUploadUrl de Supabase.
- *  El navegador sube directo con fetch PUT; el archivo no pasa por el server. */
-export async function getR2UploadUrl(key: string, contentType?: string, expiresInSeconds = 600) {
+ *  El navegador sube directo con fetch PUT; el archivo no pasa por el server.
+ *  `contentLength` viaja FIRMADO: el storage rechaza cuerpos de otro tamaño,
+ *  así el límite de 25MB se hace cumplir server-side (no solo en el cliente). */
+export async function getR2UploadUrl(
+  key: string,
+  contentType?: string,
+  contentLength?: number,
+  expiresInSeconds = 600
+) {
   return getSignedUrl(
     r2Client,
-    new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType,
+      ...(contentLength ? { ContentLength: contentLength } : {}),
+    }),
     { expiresIn: expiresInSeconds }
   );
 }
@@ -2930,9 +2942,14 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { proyecto_id, filename, content_type } = await request.json();
+    const { proyecto_id, filename, content_type, size } = await request.json();
     if (!proyecto_id || !filename) {
       return NextResponse.json({ error: 'proyecto_id y filename requeridos' }, { status: 400 });
+    }
+    // Límite server-side: el tamaño declarado viaja firmado en la URL (el
+    // storage rechaza cuerpos distintos), así el 25MB no depende del cliente.
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0 || size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Tamaño de archivo inválido (máx. 25MB)' }, { status: 400 });
     }
 
     const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
@@ -2949,7 +2966,7 @@ export async function POST(request: Request) {
     const safe = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${proyecto_id}/${crypto.randomUUID()}-${safe}`;
 
-    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined);
+    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined, size);
     return NextResponse.json({ path, url });
   } catch (err) {
     console.error('POST /api/documentos/upload-url error:', err);
@@ -2981,7 +2998,7 @@ export const subirDocumento = async (
   const urlRes = await fetch('/api/documentos/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType }),
+    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType, size: file.size }),
   });
   if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
   const { path, url } = await urlRes.json();
