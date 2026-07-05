@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   PlusCircle,
@@ -29,7 +29,6 @@ import { fm, tiempoRelativo, fechaHora, diasRestantes } from '@/lib/utils/format
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Proyecto, EstadoProyecto } from '@/types';
 import { cn } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
 
 interface ActividadLog {
   id: string;
@@ -51,6 +50,9 @@ export default function DashboardPage() {
   
   // Destello visual e ícono de carga
   const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
+
+  // IDs de actividad del último poll; null = aún no hubo carga inicial.
+  const prevActIdsRef = useRef<Set<string> | null>(null);
 
   // Sintetiza un sonido de campana sutil para alertas en tiempo real sin archivos externos
   const playChime = () => {
@@ -99,7 +101,28 @@ export default function DashboardPage() {
         setProyectos(proyData);
       }
       if (actRes.ok) {
-        const actData = await actRes.json();
+        const actData: ActividadLog[] = await actRes.json();
+        const prevIds = prevActIdsRef.current;
+        // Diff del polling: en la carga inicial (ref null) no hay chime ni destello.
+        if (prevIds) {
+          const nuevos = actData.filter((a) => !prevIds.has(a.id));
+          if (nuevos.length > 0) {
+            playChime();
+            setNewlyAddedIds((prev) => {
+              const next = new Set(prev);
+              nuevos.forEach((n) => next.add(n.id));
+              return next;
+            });
+            setTimeout(() => {
+              setNewlyAddedIds((prev) => {
+                const next = new Set(prev);
+                nuevos.forEach((n) => next.delete(n.id));
+                return next;
+              });
+            }, 4000);
+          }
+        }
+        prevActIdsRef.current = new Set(actData.map((a) => a.id));
         setActividades(actData);
       }
     } catch (err) {
@@ -111,66 +134,17 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // El setState corre tras await (o re-fija loading al mismo valor); falso positivo de set-state-in-effect.
+    // El setState corre tras await; falso positivo de set-state-in-effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDashboardData();
 
-    // Polling de respaldo cada 10 segundos
+    // Sin Realtime: el polling es el único mecanismo de refresco.
+    // El diff dentro de fetchDashboardData repone el chime + destello.
     const timer = setInterval(() => {
       fetchDashboardData(true);
     }, 10000);
 
-    // Conexión WebSockets en tiempo real con Supabase
-    const supabase = createClient();
-    
-    // 1. Canal de Bitácora de Actividades (Command Center)
-    const actividadChannel = supabase
-      .channel('realtime-actividad-dashboard')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'actividad_log'
-        },
-        (payload) => {
-          const newLog = payload.new as ActividadLog;
-          
-          // Emitir sonido
-          playChime();
-          
-          // Añadir a la lista visual de actividades al inicio
-          setActividades((prev) => {
-            if (prev.some((a) => a.id === newLog.id)) return prev;
-            return [newLog, ...prev.slice(0, 49)];
-          });
-          
-          // Marcar temporalmente para efecto visual de destello
-          setNewlyAddedIds((prev) => {
-            const next = new Set(prev);
-            next.add(newLog.id);
-            return next;
-          });
-          
-          // Quitar el destello después de 4 segundos
-          setTimeout(() => {
-            setNewlyAddedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(newLog.id);
-              return next;
-            });
-          }, 4000);
-          
-          // Re-fetch silencioso de los KPIs y estados para mantener las tarjetas del gerente al día
-          fetchDashboardData(true);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      clearInterval(timer);
-      supabase.removeChannel(actividadChannel);
-    };
+    return () => clearInterval(timer);
   }, []);
 
   // Calcular KPIs

@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import type { Notificacion } from '@/types';
 
+const POLL_MS = 20_000;
+
+// Realtime de Supabase → polling: mismo contrato del hook, así
+// NotificacionesBell no cambia. El aumento de unreadCount entre polls
+// dispara el mismo efecto visual/sonoro que antes disparaba el INSERT.
 export const useNotificaciones = (userId: string | undefined) => {
   const [list, setList] = useState<Notificacion[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -22,21 +26,8 @@ export const useNotificaciones = (userId: string | undefined) => {
     // El setState ocurre tras await (deferido); falso positivo de set-state-in-effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`notif-${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notificaciones', filter: `destinatario_id=eq.${userId}` },
-        (payload) => {
-          setList((prev) => [payload.new as Notificacion, ...prev].slice(0, 20));
-          setUnreadCount((c) => c + 1);
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const timer = setInterval(load, POLL_MS);
+    return () => clearInterval(timer);
   }, [userId, load]);
 
   const markAllRead = useCallback(async () => {

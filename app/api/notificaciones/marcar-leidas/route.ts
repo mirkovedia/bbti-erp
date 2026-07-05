@@ -1,23 +1,22 @@
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
     const ids: unknown = body?.ids;
 
-    const admin = createAdminClient();
-    let query = admin.from('notificaciones').update({ leida: true }).eq('destinatario_id', user.id);
-    if (Array.isArray(ids) && ids.length > 0) {
-      query = query.in('id', ids as string[]);
-    }
-    const { error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await prisma.notificaciones.updateMany({
+      where: {
+        destinatario_id: session.sub,
+        ...(Array.isArray(ids) && ids.length > 0 ? { id: { in: ids as string[] } } : {}),
+      },
+      data: { leida: true },
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {
