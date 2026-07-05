@@ -2850,6 +2850,8 @@ export const r2Client = new S3Client({
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
   },
+  // MinIO (dev local) requiere path-style; R2 real no lo necesita (default false)
+  forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
 });
 ```
 
@@ -3238,20 +3240,42 @@ export async function GET() {
 }
 ```
 
-- [ ] **Step 9: Configurar bucket R2 de prueba + CORS** (Cloudflare dashboard → R2 → bucket → Settings → CORS policy):
+- [ ] **Step 9: Storage S3-compatible para desarrollo — MinIO local** (no hay credenciales R2 reales todavía; MinIO valida el MISMO code path del SDK S3). Agregar a `docker-compose.dev.yml`:
 
-```json
-[
-  {
-    "AllowedOrigins": ["http://localhost:3000", "http://localhost:3006"],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedHeaders": ["content-type"],
-    "MaxAgeSeconds": 3600
-  }
-]
+```yaml
+  minio:
+    image: minio/minio
+    container_name: bbti-minio-dev
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
 ```
 
-Añadir a `.env` las 5 variables R2 con los valores del bucket de prueba.
+(y `miniodata: {}` en `volumes:`). Crear el bucket con un one-liner (SDK ya instalado):
+
+```bash
+docker compose -f docker-compose.dev.yml up -d minio
+node -e "const {S3Client,CreateBucketCommand}=require('@aws-sdk/client-s3');new S3Client({region:'auto',endpoint:'http://localhost:9000',credentials:{accessKeyId:'minioadmin',secretAccessKey:'minioadmin'},forcePathStyle:true}).send(new CreateBucketCommand({Bucket:'bbti-documentos-dev'})).then(()=>console.log('bucket OK'))"
+```
+
+Añadir a `.env` (dev):
+
+```env
+R2_ENDPOINT_URL=http://localhost:9000
+R2_BUCKET=bbti-documentos-dev
+R2_ACCESS_KEY_ID=minioadmin
+R2_SECRET_ACCESS_KEY=minioadmin
+R2_REGION=auto
+R2_FORCE_PATH_STYLE=true
+```
+
+MinIO permite presigned PUT/GET desde el navegador sin CORS extra (default `*`). ⚠️ En producción con R2 real: `R2_FORCE_PATH_STYLE` NO se define (default false) y el bucket necesita la política CORS (PUT/GET desde el dominio de la app) — queda en el checklist del ingeniero y en `.env.production.example`.
 
 - [ ] **Step 10: Verificar en el navegador** — subir un PDF en la pestaña Ingeniería de un proyecto → aparece en la lista; descargarlo (URL firmada abre/descarga con nombre legible); como Admin eliminarlo; pestaña Actividad de documentos registra los 3 eventos.
 
