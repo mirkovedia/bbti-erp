@@ -30,7 +30,11 @@ export async function PATCH(request: Request) {
     const fields = ['name', 'siglas', 'rubro', 'ruc', 'direccion', 'telefono', 'email', 'website', 'moneda', 'igv', 'orden_prefix', 'dias_alerta'];
     const updates: Record<string, unknown> = { updated_at: new Date() };
     for (const f of fields) {
-      if (body[f] !== undefined) updates[f] = body[f];
+      if (body[f] === undefined) continue;
+      // dias_alerta es Int? en el schema; el formulario lo envía como string.
+      updates[f] = f === 'dias_alerta'
+        ? (body[f] === '' || body[f] === null ? null : Number(body[f]))
+        : body[f];
     }
 
     const existing = await prisma.company_config.findFirst({ select: { id: true } });

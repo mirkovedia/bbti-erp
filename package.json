@@ -14,8 +14,6 @@
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
     "@hookform/resolvers": "^5.4.0",
     "@prisma/client": "^6.19.3",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.106.2",
     "@tanstack/react-table": "^8.21.3",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
