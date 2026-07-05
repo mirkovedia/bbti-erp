@@ -31,10 +31,20 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = { updated_at: new Date() };
     for (const f of fields) {
       if (body[f] === undefined) continue;
-      // dias_alerta es Int? en el schema; el formulario lo envía como string.
-      updates[f] = f === 'dias_alerta'
-        ? (body[f] === '' || body[f] === null ? null : Number(body[f]))
-        : body[f];
+      if (f === 'dias_alerta') {
+        // Int? en Prisma: castear y rechazar valores no numéricos con 400
+        if (body[f] === '' || body[f] === null) {
+          updates[f] = null;
+        } else {
+          const n = Number(body[f]);
+          if (!Number.isFinite(n)) {
+            return NextResponse.json({ error: 'dias_alerta debe ser un número' }, { status: 400 });
+          }
+          updates[f] = Math.trunc(n);
+        }
+      } else {
+        updates[f] = body[f];
+      }
     }
 
     const existing = await prisma.company_config.findFirst({ select: { id: true } });
