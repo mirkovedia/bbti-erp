@@ -1,24 +1,16 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { data, error } = await supabase
-      .from('actividad_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
+    const data = await prisma.actividad_log.findMany({
+      orderBy: { created_at: 'desc' },
+      take: 50,
+    });
     return NextResponse.json(data);
   } catch (err) {
     console.error('GET /api/actividad error:', err);
