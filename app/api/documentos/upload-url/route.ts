@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { getR2UploadUrl } from '@/lib/r2/r2Storage';
 import { checkUploadPermission } from '@/lib/auth/permissions';
+import { MAX_FILE_SIZE } from '@/lib/constants';
 import type { Rol } from '@/types';
 
 export async function POST(request: Request) {
@@ -10,9 +11,14 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { proyecto_id, filename, content_type } = await request.json();
+    const { proyecto_id, filename, content_type, size } = await request.json();
     if (!proyecto_id || !filename) {
       return NextResponse.json({ error: 'proyecto_id y filename requeridos' }, { status: 400 });
+    }
+    // Límite server-side: el tamaño declarado viaja firmado en la URL (el
+    // storage rechaza cuerpos distintos), así el 25MB no depende del cliente.
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0 || size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Tamaño de archivo inválido (máx. 25MB)' }, { status: 400 });
     }
 
     const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
     const safe = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${proyecto_id}/${crypto.randomUUID()}-${safe}`;
 
-    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined);
+    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined, size);
     return NextResponse.json({ path, url });
   } catch (err) {
     console.error('POST /api/documentos/upload-url error:', err);

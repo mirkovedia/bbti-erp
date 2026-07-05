@@ -18,7 +18,7 @@ export const subirDocumento = async (
   const urlRes = await fetch('/api/documentos/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType }),
+    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType, size: file.size }),
   });
   if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
   const { path, url } = await urlRes.json();
