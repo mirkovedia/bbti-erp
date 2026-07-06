@@ -1,6 +1,7 @@
 // Helpers de test post-migración: login HTTP real + Prisma para setup/teardown.
 // Reemplaza a supabase-test.mjs (anonClient/serviceClient/getAuthCookie).
-import { PrismaClient } from '@prisma/client';
+import prismaPkg from '@prisma/client';
+const { PrismaClient } = prismaPkg;
 
 export const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 

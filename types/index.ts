@@ -60,6 +60,8 @@ interface Etapa {
   nombre: string;
   orden: number;
   estado: EstadoEtapa;
+  completado_por?: string | null;
+  completado_at?: string | null;
 }
 
 interface Comentario {

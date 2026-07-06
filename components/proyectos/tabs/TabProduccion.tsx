@@ -8,6 +8,7 @@ import { can } from '@/lib/auth/permissions';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { cn } from '@/lib/utils';
 import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
+import { fechaHora } from '@/lib/utils/format';
 
 interface Props {
   proyecto: Proyecto;
@@ -80,7 +81,14 @@ export const TabProduccion = ({ proyecto, onUpdate }: Props) => {
                 className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700"
               >
                 <Icon className={cn('w-5 h-5', etapaColors[etapa.estado] ?? 'text-slate-500')} />
-                <span className="flex-1 text-sm text-white">{etapa.nombre}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm text-white block">{etapa.nombre}</span>
+                  {etapa.estado === 'COMPLETADO' && etapa.completado_por && (
+                    <span className="text-xs text-green-400/80 mt-0.5 block">
+                      Confirmada · {etapa.completado_por} · {fechaHora(etapa.completado_at)}
+                    </span>
+                  )}
+                </div>
                 {canEdit && (
                   <select
                     value={etapa.estado}

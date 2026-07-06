@@ -386,12 +386,17 @@ export async function PATCH(
     // Etapas — actualización puntual por id
     if (Array.isArray(body.etapas)) {
       await Promise.all(
-        body.etapas.map((e: { id: string; estado: string }) =>
-          prisma.proyecto_etapas.updateMany({
+        body.etapas.map((e: { id: string; estado: string }) => {
+          const isCompleted = e.estado === 'COMPLETADO';
+          return prisma.proyecto_etapas.updateMany({
             where: { id: e.id, proyecto_id: id },
-            data: { estado: e.estado },
-          })
-        )
+            data: {
+              estado: e.estado,
+              completado_por: isCompleted ? autor : null,
+              completado_at: isCompleted ? now : null,
+            },
+          });
+        })
       );
 
       const currentProy = await prisma.proyectos.findUnique({ where: { id }, select: { cliente: true } });
