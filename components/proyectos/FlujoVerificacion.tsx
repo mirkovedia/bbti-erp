@@ -8,6 +8,7 @@ import { can } from '@/lib/auth/permissions';
 import { computeFlujoRows, permsForEtapa, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { cn } from '@/lib/utils';
+import { fechaHora } from '@/lib/utils/format';
 
 interface Props {
   proyecto: Proyecto;
@@ -88,7 +89,7 @@ export const FlujoVerificacion = ({ proyecto, onUpdate }: Props) => {
                   )}
                 >
                   {row.status === 'confirmada'
-                    ? `Confirmada${row.confirmadaPor ? ' · ' + row.confirmadaPor : ''}${row.confirmadaAt ? ' · ' + row.confirmadaAt.split('T')[0] : ''}`
+                    ? `Confirmada${row.confirmadaPor ? ' · ' + row.confirmadaPor : ''}${row.confirmadaAt ? ' · ' + fechaHora(row.confirmadaAt) : ''}`
                     : row.detalle}
                 </p>
               </div>
