@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Empaqueta un server.js autocontenido para la imagen Docker (etapa runner).
+  output: "standalone",
 };
 
 export default nextConfig;
