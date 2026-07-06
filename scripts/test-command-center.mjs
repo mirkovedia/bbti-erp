@@ -1,7 +1,5 @@
 // scripts/test-command-center.mjs
-import { serviceClient } from './lib/supabase-test.mjs';
-
-const supabase = serviceClient();
+import { db } from './lib/test-helpers.mjs';
 
 async function run() {
   console.log('--- Iniciando Test Real de Command Center ---');
@@ -41,21 +39,34 @@ async function run() {
     }
   ];
 
-  console.log('Insertando actividades de prueba en la base de datos Supabase...');
+  console.log('Insertando actividades de prueba en la base de datos Postgres...');
   
-  const { data, error } = await supabase
-    .from('actividad_log')
-    .insert(testLogs)
-    .select();
+  let data = [];
+  let error = null;
+  try {
+    await db.actividad_log.createMany({ data: testLogs });
+    // Recuperar las actividades recién creadas
+    data = await db.actividad_log.findMany({
+      where: {
+        proyecto_id: { in: testLogs.map(l => l.proyecto_id) }
+      },
+      orderBy: { created_at: 'desc' },
+      take: testLogs.length
+    });
+  } catch (err) {
+    error = err;
+  }
 
   if (error) {
-    console.error('Error al insertar actividades en Supabase:', error);
+    console.error('Error al insertar actividades en Postgres:', error);
   } else {
     console.log('¡Actividades de prueba creadas con éxito!');
     data.forEach((log) => {
       console.log(`[${log.rol}] ${log.usuario}: ${log.detalle} (${log.proyecto_id})`);
     });
   }
+
+  await db.$disconnect();
 }
 
 run();

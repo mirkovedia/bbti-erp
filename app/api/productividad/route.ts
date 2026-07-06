@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getRolePermissionsServer } from '@/lib/auth/permissions';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
+import { getRolePermissionsServer } from '@/lib/auth/permissions-server';
 import type { Rol } from '@/types';
 
 // Acciones de alto valor (avance real del trabajo), separadas de la rutina.
@@ -30,16 +30,12 @@ interface FilaUsuario {
 export async function GET(req: NextRequest) {
   try {
     // Auth con la sesión del navegador.
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-
-    // El resto se lee con service role (bypassa RLS), patrón del backend.
-    const admin = createAdminClient();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     // Verificar permiso canViewReports (respeta permisos dinámicos por rol).
-    const { data: me } = await admin.from('users').select('rol').eq('id', user.id).maybeSingle();
-    const perms = await getRolePermissionsServer(admin);
+    const me = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
+    const perms = await getRolePermissionsServer();
     const rolActual = me?.rol as Rol | undefined;
     if (!rolActual || !perms[rolActual]?.canViewReports) {
       return NextResponse.json({ error: 'Acceso restringido' }, { status: 403 });
@@ -54,18 +50,22 @@ export async function GET(req: NextRequest) {
       new Date(Date.parse(`${hasta}T00:00:00Z`) - 6 * 86_400_000).toISOString().split('T')[0];
 
     // Usuarios activos (base: los que no registraron nada igual deben aparecer).
-    const { data: usuarios } = await admin
-      .from('users')
-      .select('nombre, rol, activo')
-      .order('nombre');
+    const usuarios = await prisma.users.findMany({
+      select: { nombre: true, rol: true, activo: true },
+      orderBy: { nombre: 'asc' },
+    });
 
     // Actividad dentro del rango [desde 00:00, hasta 23:59:59] hora Lima.
-    const { data: eventos } = await admin
-      .from('actividad_log')
-      .select('usuario, rol, accion, proyecto_id, created_at')
-      .gte('created_at', `${desde}T00:00:00-05:00`)
-      .lte('created_at', `${hasta}T23:59:59-05:00`)
-      .order('created_at', { ascending: false });
+    const eventos = await prisma.actividad_log.findMany({
+      where: {
+        created_at: {
+          gte: new Date(`${desde}T00:00:00-05:00`),
+          lte: new Date(`${hasta}T23:59:59-05:00`),
+        },
+      },
+      select: { usuario: true, rol: true, accion: true, proyecto_id: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+    });
 
     // Inicializar una fila por usuario activo.
     const filas = new Map<string, FilaUsuario>();
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
       filas.set(u.nombre, {
         nombre: u.nombre,
         rol: u.rol ?? null,
-        activo: u.activo !== false,
+        activo: true, // ya filtrado arriba (if activo === false) continue;
         total: 0,
         hitos: 0,
         rutina: 0,
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
       fila.porAccion[e.accion] = (fila.porAccion[e.accion] ?? 0) + 1;
       if (e.proyecto_id) proyectosPorUsuario.get(e.usuario)?.add(e.proyecto_id);
       // ultimaActividad: como los eventos vienen DESC, el primero visto es el más reciente.
-      if (!fila.ultimaActividad) fila.ultimaActividad = e.created_at;
+      if (!fila.ultimaActividad) fila.ultimaActividad = e.created_at.toISOString();
     }
 
     for (const [nombre, set] of proyectosPorUsuario) {

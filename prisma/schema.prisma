@@ -1,0 +1,271 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model company_config {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @default("BBTI")
+  siglas       String?  @default("S.A.C.")
+  rubro        String?  @default("Fabricación de Tableros Eléctricos")
+  ruc          String?
+  direccion    String?
+  telefono     String?
+  email        String?
+  website      String?
+  moneda       String?  @default("S/")
+  igv          String?  @default("18")
+  orden_prefix String?  @default("PR")
+  dias_alerta  Int?     @default(7)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model users {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre         String
+  email          String           @unique
+  area           String
+  rol            String
+  activo         Boolean          @default(true)
+  password_hash  String
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  notificaciones notificaciones[]
+  proyectos      proyectos[]
+}
+
+model proyectos {
+  id               String                       @id
+  cliente          String
+  fecha_creacion   String
+  monto            Float                        @default(0) @db.DoublePrecision
+  usuario_id       String?                      @db.Uuid
+  usuario_nombre   String?
+  estado           String                       @default("EN INGENIERÍA")
+  activo           Boolean                      @default(true)
+  created_at       DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime                     @default(now()) @db.Timestamptz(6)
+  usuario          users?                       @relation(fields: [usuario_id], references: [id])
+  comercial        proyecto_comercial?
+  ingenieria       proyecto_ingenieria?
+  materiales       proyecto_materiales[]
+  produccion       proyecto_produccion?
+  etapas           proyecto_etapas[]
+  finanzas         proyecto_finanzas?
+  pagos            proyecto_pagos[]
+  comentarios      proyecto_comentarios[]
+  observaciones    proyecto_observaciones[]
+  documentos       proyecto_documentos[]
+  confirmaciones   proyecto_confirmaciones[]
+  alertas          alertas[]
+  alertas_enviadas proyecto_alertas_enviadas[]
+  notificaciones   notificaciones[]
+
+  @@index([estado])
+  @@index([usuario_id])
+  @@index([activo])
+}
+
+model proyecto_comercial {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id     String    @unique
+  fecha_entrega   String?
+  dias_plazo      Int?
+  adelanto        Float?    @default(0) @db.DoublePrecision
+  adelanto_fijado Boolean?  @default(false)
+  metrado         String?
+  alerta          String?
+  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto        proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+}
+
+model proyecto_ingenieria {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id   String    @unique
+  estado_planos String?   @default("Solicitud de planos")
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto      proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+}
+
+model proyecto_materiales {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id     String
+  nombre          String
+  cantidad        Int?      @default(0)
+  unidad          String?   @default("und")
+  comprado        Int?      @default(0)
+  estado          String?   @default("PENDIENTE")
+  codigo          String?
+  precio_unitario Float?    @default(0) @db.DoublePrecision
+  proyecto        proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model proyecto_produccion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String    @unique
+  progreso    Int?      @default(0)
+  pruebas     Boolean?  @default(false)
+  envio       Boolean?  @default(false)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+}
+
+model proyecto_etapas {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String
+  nombre      String
+  orden       Int
+  estado      String?   @default("PENDIENTE")
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model proyecto_finanzas {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id    String    @unique
+  adelanto       Float?    @default(0) @db.DoublePrecision
+  fecha_adelanto String?
+  porcentaje     Int?      @default(0)
+  forma_pago     String?
+  alerta         String?
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto       proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+}
+
+model proyecto_pagos {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String
+  descripcion String?
+  monto       Float?    @db.DoublePrecision
+  fecha       String?
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model proyecto_comentarios {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String
+  autor       String
+  texto       String
+  fecha       String
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model proyecto_observaciones {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String
+  autor       String
+  texto       String
+  fecha       String
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model proyecto_documentos {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id    String
+  nombre         String
+  tipo           String?
+  storage_path   String?
+  subido_por     String?
+  subido_por_rol String?
+  estado         String?
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto       proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+}
+
+model alertas {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String?
+  tipo        String?
+  mensaje     String
+  leida       Boolean?  @default(false)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos? @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([proyecto_id])
+  @@index([leida])
+}
+
+model proyecto_confirmaciones {
+  proyecto_id    String
+  etapa          String
+  confirmada_por String?
+  confirmada_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto       proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@id([proyecto_id, etapa])
+}
+
+model notificaciones {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  destinatario_id String     @db.Uuid
+  proyecto_id     String?
+  tipo            String
+  mensaje         String
+  actor           String?
+  leida           Boolean?   @default(false)
+  created_at      DateTime   @default(now()) @db.Timestamptz(6)
+  destinatario    users      @relation(fields: [destinatario_id], references: [id], onDelete: Cascade)
+  proyecto        proyectos? @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@index([destinatario_id, leida])
+}
+
+model documento_eventos {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documento_id     String?  @db.Uuid
+  proyecto_id      String?
+  documento_nombre String
+  tipo             String
+  usuario          String?
+  rol              String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)])
+}
+
+model actividad_log {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proyecto_id String?
+  cliente     String?
+  usuario     String
+  rol         String
+  accion      String
+  detalle     String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)])
+}
+
+model role_permissions {
+  rol         String   @id
+  permissions Json
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model proyecto_alertas_enviadas {
+  id          Int       @id @default(autoincrement())
+  proyecto_id String
+  tipo        String
+  enviada_at  DateTime  @default(now()) @db.Timestamptz(6)
+  proyecto    proyectos @relation(fields: [proyecto_id], references: [id], onDelete: Cascade)
+
+  @@unique([proyecto_id, tipo])
+}

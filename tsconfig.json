@@ -30,5 +30,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "bbti-erp-cambios-especificos",
+    "bbti-erp-consultor-docker-rds-r2"
+  ]
 }

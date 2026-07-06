@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
 import { notificar } from '@/lib/notificaciones';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
 import { DOC_PREFIX } from '@/lib/constants';
@@ -9,24 +10,20 @@ import { checkUploadPermission } from '@/lib/auth/permissions';
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const proyectoId = new URL(request.url).searchParams.get('proyecto_id');
-    let query = supabase
-      .from('proyecto_documentos')
-      .select('*, proyectos(cliente)')
-      .order('created_at', { ascending: false });
-    if (proyectoId) query = query.eq('proyecto_id', proyectoId);
+    const data = await prisma.proyecto_documentos.findMany({
+      where: proyectoId ? { proyecto_id: proyectoId } : undefined,
+      include: { proyecto: { select: { cliente: true } } },
+      orderBy: { created_at: 'desc' },
+    });
 
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const docs = (data ?? []).map((d) => ({
+    const docs = data.map((d) => ({
       id: d.id,
       proyecto_id: d.proyecto_id,
-      cliente: d.proyectos?.cliente ?? '',
+      cliente: d.proyecto?.cliente ?? '',
       nombre: d.nombre,
       tipo: d.tipo,
       storage_path: d.storage_path,
@@ -41,12 +38,11 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: registra los metadatos de un documento ya subido al Storage
+// POST: registra los metadatos de un documento ya subido a R2
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { proyecto_id, nombre, tipo, storage_path } = await request.json();
     if (typeof proyecto_id !== 'string' || typeof nombre !== 'string' || typeof storage_path !== 'string'
@@ -56,48 +52,39 @@ export async function POST(request: Request) {
     if (nombre.length > 255) {
       return NextResponse.json({ error: 'Nombre demasiado largo' }, { status: 400 });
     }
-    // El path debe pertenecer al proyecto (evita asociar archivos de otros proyectos)
     if (!storage_path.startsWith(`${proyecto_id}/`)) {
       return NextResponse.json({ error: 'storage_path inválido para este proyecto' }, { status: 400 });
     }
 
-    const { data: userData } = await supabase
-      .from('users').select('nombre, rol').eq('id', user.id).single();
-
+    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { nombre: true, rol: true } });
     if (!userData) {
       return NextResponse.json({ error: 'Usuario no registrado' }, { status: 403 });
     }
-
     if (!checkUploadPermission(userData.rol as Rol, nombre)) {
       return NextResponse.json({ error: 'No autorizado para registrar este tipo de archivo' }, { status: 403 });
     }
 
-    const { data, error } = await supabase
-      .from('proyecto_documentos')
-      .insert({
+    const data = await prisma.proyecto_documentos.create({
+      data: {
         proyecto_id,
         nombre,
         tipo: tipo ?? null,
         storage_path,
-        subido_por: userData?.nombre ?? 'Sistema',
-        subido_por_rol: userData?.rol ?? null,
-      })
-      .select()
-      .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        subido_por: userData.nombre ?? 'Sistema',
+        subido_por_rol: userData.rol ?? null,
+      },
+    });
 
     await logDocumentoEvento({
       documentoId: data.id,
       proyectoId: proyecto_id,
       documentoNombre: nombre,
       tipo: 'subida',
-      usuario: userData?.nombre,
-      rol: userData?.rol,
+      usuario: userData.nombre,
+      rol: userData.rol,
     });
 
-    // Enruta el aviso según el tipo de documento (por prefijo en el nombre):
-    // comprobante → Finanzas · OC/Especificaciones → Ingeniería · despiece → Producción · resto → Comercial.
+    // Enrutamiento del aviso por prefijo del nombre (igual que hoy)
     let rolesDestino: Rol[] = ['Comercial'];
     if (nombre.startsWith(DOC_PREFIX.comprobante)) rolesDestino = ['Finanzas'];
     else if (nombre.startsWith(DOC_PREFIX.oc) || nombre.startsWith(DOC_PREFIX.especificaciones)) rolesDestino = ['Ingeniería'];
@@ -106,10 +93,10 @@ export async function POST(request: Request) {
     await notificar({
       proyectoId: proyecto_id,
       tipo: 'documento',
-      mensaje: `${userData?.nombre ?? 'Alguien'} subió "${nombre}" a ${proyecto_id}.`,
+      mensaje: `${userData.nombre ?? 'Alguien'} subió "${nombre}" a ${proyecto_id}.`,
       rolesDestino,
-      actorId: user.id,
-      actorNombre: userData?.nombre,
+      actorId: session.sub,
+      actorNombre: userData.nombre,
     });
 
     return NextResponse.json(data, { status: 201 });

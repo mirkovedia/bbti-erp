@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { useAppStore } from '@/store/appStore';
-import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { Rol, Permissions } from '@/types';
 
@@ -19,43 +18,46 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const loadData = async () => {
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      // try/catch: fetch LANZA en errores de red (supabase-js devolvía {error});
+      // sin esto, un fallo de red dejaría el loader infinito.
+      try {
+        // Perfil, permisos y configuración vía API (ya no hay cliente de BD en el navegador).
+        const meRes = await fetch('/api/auth/me');
+        if (!meRes.ok) {
+          setUser(null);
+          router.push('/login');
+          return;
+        }
+        const { user: perfil } = await meRes.json();
 
-      if (!authUser) {
+        const yaCargado = !!user && user.id === perfil.id;
+        const [permsRes, configRes] = await Promise.all([
+          fetch('/api/role-permissions'),
+          fetch('/api/configuracion'),
+        ]);
+
+        if (permsRes.ok) {
+          const permsMap = (await permsRes.json()) as Record<Rol, Permissions>;
+          useAppStore.getState().setRolePermissions(permsMap);
+        }
+
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          useAppStore.getState().setCompanyConfig(
+            configData.moneda || 'S/',
+            Number(configData.igv) || 18
+          );
+        }
+
+        if (!yaCargado) {
+          setUser(perfil);
+        }
+      } catch (err) {
+        // Fallo de red al cargar la sesión → tratar como no autenticado
+        // (paridad con el comportamiento previo de supabase.auth.getUser).
+        console.error('Error cargando sesión:', err);
         setUser(null);
         router.push('/login');
-        return;
-      }
-
-      // Permisos, configuración y perfil no dependen entre sí: en paralelo (1 RTT en vez de 3)
-      const yaCargado = !!user && user.id === authUser.id;
-      const [{ data: permsData }, { data: configData }, userRes] = await Promise.all([
-        supabase.from('role_permissions').select('rol, permissions'),
-        supabase.from('company_config').select('moneda, igv').limit(1).maybeSingle(),
-        // Si ya tenemos en memoria al usuario correcto, no recargamos el perfil.
-        yaCargado
-          ? Promise.resolve(null)
-          : supabase.from('users').select('*').eq('id', authUser.id).single(),
-      ]);
-
-      if (permsData && permsData.length > 0) {
-        const permsMap = permsData.reduce<Record<string, Permissions>>((acc, row) => {
-          acc[row.rol] = row.permissions as Permissions;
-          return acc;
-        }, {});
-        useAppStore.getState().setRolePermissions(permsMap as Record<Rol, Permissions>);
-      }
-
-      if (configData) {
-        useAppStore.getState().setCompanyConfig(
-          configData.moneda || 'S/',
-          Number(configData.igv) || 18
-        );
-      }
-
-      if (userRes?.data) {
-        setUser(userRes.data);
       }
     };
 

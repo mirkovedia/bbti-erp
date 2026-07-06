@@ -3,7 +3,6 @@
 import { LogOut, Menu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/appStore';
-import { createClient } from '@/lib/supabase/client';
 import { NotificacionesBell } from '@/components/layout/NotificacionesBell';
 import { cn } from '@/lib/utils';
 
@@ -23,8 +22,12 @@ export const Topbar = () => {
   const { user, setUser, sidebarCollapsed, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      // Aunque falle la red, el logout local procede (cookie expira sola)
+      console.error('Error al cerrar sesión:', err);
+    }
     setUser(null);
     router.push('/login');
   };

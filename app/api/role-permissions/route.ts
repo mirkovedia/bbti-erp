@@ -1,30 +1,23 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
 import { PERMS } from '@/lib/auth/permissions';
 import type { Rol, Permissions } from '@/types';
 
-// GET: Retorna el mapa completo de permisos por rol
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { data, error } = await supabase.from('role_permissions').select('rol, permissions');
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const data = await prisma.role_permissions.findMany({ select: { rol: true, permissions: true } });
 
     const map = {} as Record<Rol, Permissions>;
-    for (const r of data ?? []) {
-      map[r.rol as Rol] = r.permissions as Permissions;
+    for (const r of data) {
+      map[r.rol as Rol] = r.permissions as unknown as Permissions;
     }
-
-    // Rellenar con los estáticos si falta alguno
     for (const r of Object.keys(PERMS) as Rol[]) {
-      if (!map[r]) {
-        map[r] = PERMS[r];
-      }
+      if (!map[r]) map[r] = PERMS[r];
     }
-
     return NextResponse.json(map);
   } catch (err) {
     console.error('GET /api/role-permissions error:', err);
@@ -32,20 +25,12 @@ export async function GET() {
   }
 }
 
-// PATCH: Actualiza los permisos de un rol específico (Solo Administrador)
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    // Verificar que el usuario tenga rol Administrador
-    const { data: userData } = await supabase
-      .from('users')
-      .select('rol')
-      .eq('id', user.id)
-      .single();
-
+    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
     if (!userData || userData.rol !== 'Administrador') {
       return NextResponse.json({ error: 'Acceso denegado. Solo el Administrador puede editar roles.' }, { status: 403 });
     }
@@ -55,11 +40,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'rol y permissions requeridos' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('role_permissions')
-      .upsert({ rol, permissions, updated_at: new Date().toISOString() }, { onConflict: 'rol' });
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await prisma.role_permissions.upsert({
+      where: { rol },
+      update: { permissions, updated_at: new Date() },
+      create: { rol, permissions },
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

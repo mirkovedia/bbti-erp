@@ -128,7 +128,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: bbti
     ports:
-      - "5432:5432"
+      # 5433 en el host: la máquina de dev tiene un PostgreSQL 18 nativo ocupando 5432
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
@@ -164,7 +165,7 @@ npm install -D prisma tsx
 - [ ] **Step 4: `.env` para el CLI de Prisma** (gitignored por `.env*`; Next también lo lee)
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bbti?schema=gestion_proyectos
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/bbti?schema=gestion_proyectos
 ```
 
 - [ ] **Step 5: Escribir `prisma/schema.prisma` completo**
@@ -734,7 +735,8 @@ export const createSessionToken = async (p: SessionPayload): Promise<string> =>
 
 export const verifySessionToken = async (token: string): Promise<SessionPayload | null> => {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    // Algoritmo fijado: evita confusión de algoritmos si esto migra a claves asimétricas
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] });
     if (!payload.sub) return null;
     return { sub: payload.sub, rol: String(payload.rol ?? ''), nombre: String(payload.nombre ?? '') };
   } catch {
@@ -782,6 +784,10 @@ import { createSessionToken, SESSION_COOKIE } from '@/lib/auth/session';
 
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días, igual que la expiración del JWT
 
+// Hash bcrypt válido de una cadena aleatoria (generar con:
+// node -e "console.log(require('bcryptjs').hashSync(crypto.randomUUID(), 10))")
+const DUMMY_HASH = '<hash bcrypt generado en implementación>';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -792,8 +798,12 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.users.findUnique({ where: { email } });
-    // Mensaje idéntico exista o no el usuario (no filtrar cuáles emails existen)
-    if (!user || user.activo === false || !(await bcrypt.compare(password, user.password_hash))) {
+    // Anti-enumeración: mensaje idéntico Y tiempo idéntico exista o no el usuario.
+    // Si el email no existe (o está inactivo) igual se compara contra un hash dummy —
+    // sin esto, la latencia del 401 delata qué cuentas existen (bcrypt tarda ~100ms).
+    const hashToCheck = user && user.activo !== false ? user.password_hash : DUMMY_HASH;
+    const passwordOk = await bcrypt.compare(password, hashToCheck);
+    if (!user || user.activo === false || !passwordOk) {
       return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
     }
 
@@ -824,7 +834,13 @@ import { SESSION_COOKIE } from '@/lib/auth/session';
 
 export async function POST() {
   const res = NextResponse.json({ success: true });
-  res.cookies.set(SESSION_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
+  res.cookies.set(SESSION_COOKIE, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.COOKIE_SECURE === 'true',
+    path: '/',
+    maxAge: 0,
+  });
   return res;
 }
 ```
@@ -905,9 +921,20 @@ const SESSION_COOKIE = 'bbti_session';
 // jose funciona en runtime edge (jsonwebtoken NO — por eso se eligió jose).
 
 export async function proxy(request: NextRequest) {
-  // Los endpoints de cron se autentican con CRON_SECRET en su propio handler,
-  // no con la sesión; deben saltarse el guard de redirección a /login.
-  if (request.nextUrl.pathname.startsWith('/api/cron')) {
+  // Rutas que deben pasar SIN sesión:
+  // - /api/cron/*: se autentica con CRON_SECRET en su handler.
+  // - /api/health: lo consulta el healthcheck de Docker.
+  // - /api/auth/*: login/logout no tienen sesión todavía (sin este bypass,
+  //   el POST de login se redirigiría a /login y sería imposible loguearse);
+  //   /api/auth/me valida la sesión por su cuenta y responde 401 JSON.
+  // Prefijos con frontera exacta ('/x' o '/x/...') para no matchear rutas
+  // hermanas futuras (p. ej. /api/authorize) — esto es el gate de seguridad.
+  const pathname = request.nextUrl.pathname;
+  if (
+    pathname === '/api/health' ||
+    pathname === '/api/cron' || pathname.startsWith('/api/cron/') ||
+    pathname === '/api/auth' || pathname.startsWith('/api/auth/')
+  ) {
     return NextResponse.next({ request });
   }
 
@@ -915,7 +942,7 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (token && process.env.JWT_SECRET) {
     try {
-      await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET));
+      await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET), { algorithms: ['HS256'] });
       autenticado = true;
     } catch {
       autenticado = false; // token vencido o alterado → tratar como anónimo
@@ -942,15 +969,25 @@ export const config = {
 };
 ```
 
-- [ ] **Step 2: Verificar**
+- [ ] **Step 2: Verificar** (incluye la verificación funcional de los endpoints de la Task 5, que el proxy Supabase bloqueaba)
 
 ```bash
 curl -si http://localhost:3000/proyectos | head -3
 # Expected: 307 → /login (sin cookie)
-curl -si http://localhost:3000/proyectos -H "Cookie: bbti_session=<token válido>" | head -3
-# Expected: 200
 curl -si http://localhost:3000/api/cron/alertas-vencimiento | head -3
 # Expected: 401 del handler (NO redirect 307) — el bypass sigue vivo
+curl -si http://localhost:3000/api/health | head -3
+# Expected: 200 (bypass de health)
+
+# Verificación completa de auth (Task 5, ahora alcanzable):
+curl -si -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@bbti.com.pe","password":"admin2024"}'
+# Expected: 200, Set-Cookie: bbti_session=...; user sin password_hash
+curl -si -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@bbti.com.pe","password":"mala"}'
+# Expected: 401 (NO 307)
+curl -si http://localhost:3000/api/auth/me -H "Cookie: bbti_session=<token>"
+# Expected: 200 con el perfil
+curl -si http://localhost:3000/proyectos -H "Cookie: bbti_session=<token>" | head -3
+# Expected: 200 (el guard acepta la sesión propia)
 ```
 
 - [ ] **Step 3: Commit**
@@ -1004,7 +1041,12 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
 
 ```tsx
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      // Aunque falle la red, el logout local procede (cookie expira sola)
+      console.error('Error al cerrar sesión:', err);
+    }
     setUser(null);
     router.push('/login');
   };
@@ -1016,6 +1058,9 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
   useEffect(() => {
     const loadData = async () => {
       // Perfil, permisos y configuración vía API (ya no hay cliente de BD en el navegador).
+      // try/catch: fetch LANZA en errores de red (supabase-js devolvía {error});
+      // sin esto, un fallo de red dejaría el loader infinito.
+      try {
       const meRes = await fetch('/api/auth/me');
       if (!meRes.ok) {
         setUser(null);
@@ -1045,6 +1090,13 @@ git commit -m "feat: proxy verifica sesión JWT propia (jose) en vez de Supabase
 
       if (!yaCargado) {
         setUser(perfil);
+      }
+      } catch (err) {
+        // Fallo de red al cargar la sesión → tratar como no autenticado
+        // (paridad con el comportamiento previo de supabase.auth.getUser).
+        console.error('Error cargando sesión:', err);
+        setUser(null);
+        router.push('/login');
       }
     };
 
@@ -1325,18 +1377,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No tienes permiso para crear proyectos' }, { status: 403 });
     }
 
-    const data = await prisma.proyectos.create({
-      data: {
-        id,
-        cliente: body.cliente,
-        fecha_creacion: new Date().toISOString().split('T')[0],
-        monto: body.monto || 0,
-        usuario_id: session.sub,
-        usuario_nombre: userData?.nombre || 'Sistema',
-        estado: 'EN INGENIERÍA', // el estado es automático; un proyecto nuevo arranca en Ingeniería
-      },
-    });
-
     const etapasDefault = [
       'Habilitación de material',
       'Área de Corte',
@@ -1347,34 +1387,62 @@ export async function POST(request: Request) {
       'Área de Ensamblaje',
     ];
 
-    // Sub-tablas y bitácora independientes entre sí → en paralelo
-    await Promise.all([
-      registrarActividad({
-        proyectoId: id,
-        cliente: body.cliente,
-        usuario: userData?.nombre || 'Sistema',
-        rol: rol || 'Sistema',
-        accion: 'creacion',
-        detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
-      }),
-      body.fecha_entrega || body.dias_plazo || body.adelanto
-        ? prisma.proyecto_comercial.create({
-            data: {
-              proyecto_id: id,
-              fecha_entrega: body.fecha_entrega || null,
-              dias_plazo: body.dias_plazo || null,
-              adelanto: body.adelanto || 0,
-              metrado: body.metrado || '',
-            },
-          })
-        : Promise.resolve(null),
-      prisma.proyecto_etapas.createMany({
-        data: etapasDefault.map((nombre, i) => ({ proyecto_id: id, nombre, orden: i + 1, estado: 'PENDIENTE' })),
-      }),
-      prisma.proyecto_ingenieria.create({ data: { proyecto_id: id, estado_planos: 'Solicitud de planos' } }),
-      prisma.proyecto_produccion.create({ data: { proyecto_id: id, progreso: 0, pruebas: false, envio: false } }),
-      prisma.proyecto_finanzas.create({ data: { proyecto_id: id, adelanto: body.adelanto || 0, porcentaje: 0 } }),
-    ]);
+    // Transacción: si falla una sub-tabla no quedan filas parciales.
+    let data;
+    try {
+      data = await prisma.$transaction(async (tx) => {
+        const proyecto = await tx.proyectos.create({
+          data: {
+            id,
+            cliente: body.cliente,
+            fecha_creacion: new Date().toISOString().split('T')[0],
+            monto: body.monto || 0,
+            usuario_id: session.sub,
+            usuario_nombre: userData?.nombre || 'Sistema',
+            estado: 'EN INGENIERÍA', // el estado es automático; un proyecto nuevo arranca en Ingeniería
+          },
+        });
+        await Promise.all([
+          body.fecha_entrega || body.dias_plazo || body.adelanto
+            ? tx.proyecto_comercial.create({
+                data: {
+                  proyecto_id: id,
+                  fecha_entrega: body.fecha_entrega || null,
+                  dias_plazo: body.dias_plazo || null,
+                  adelanto: body.adelanto || 0,
+                  metrado: body.metrado || '',
+                },
+              })
+            : Promise.resolve(null),
+          tx.proyecto_etapas.createMany({
+            data: etapasDefault.map((nombre, i) => ({ proyecto_id: id, nombre, orden: i + 1, estado: 'PENDIENTE' })),
+          }),
+          tx.proyecto_ingenieria.create({ data: { proyecto_id: id, estado_planos: 'Solicitud de planos' } }),
+          tx.proyecto_produccion.create({ data: { proyecto_id: id, progreso: 0, pruebas: false, envio: false } }),
+          tx.proyecto_finanzas.create({ data: { proyecto_id: id, adelanto: body.adelanto || 0, porcentaje: 0 } }),
+        ]);
+        return proyecto;
+      });
+    } catch (e: unknown) {
+      // P2002 = colisión de PK: dos POST simultáneos calcularon el mismo correlativo
+      if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2002') {
+        return NextResponse.json(
+          { error: 'Conflicto al generar el ID del proyecto, intenta de nuevo', code: 'ID_CONFLICT' },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
+
+    // Bitácora fuera de la transacción: solo se registra si el proyecto se creó
+    await registrarActividad({
+      proyectoId: id,
+      cliente: body.cliente,
+      usuario: userData?.nombre || 'Sistema',
+      rol: rol || 'Sistema',
+      accion: 'creacion',
+      detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
+    });
 
     await notificar({
       proyectoId: id,
@@ -2782,6 +2850,8 @@ export const r2Client = new S3Client({
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
   },
+  // MinIO (dev local) requiere path-style; R2 real no lo necesita (default false)
+  forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
 });
 ```
 
@@ -2835,11 +2905,23 @@ export async function getR2SignedUrl(key: string, expiresInSeconds = 3600, filen
 }
 
 /** URL firmada de SUBIDA (PUT) — reemplaza createSignedUploadUrl de Supabase.
- *  El navegador sube directo con fetch PUT; el archivo no pasa por el server. */
-export async function getR2UploadUrl(key: string, contentType?: string, expiresInSeconds = 600) {
+ *  El navegador sube directo con fetch PUT; el archivo no pasa por el server.
+ *  `contentLength` viaja FIRMADO: el storage rechaza cuerpos de otro tamaño,
+ *  así el límite de 25MB se hace cumplir server-side (no solo en el cliente). */
+export async function getR2UploadUrl(
+  key: string,
+  contentType?: string,
+  contentLength?: number,
+  expiresInSeconds = 600
+) {
   return getSignedUrl(
     r2Client,
-    new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType,
+      ...(contentLength ? { ContentLength: contentLength } : {}),
+    }),
     { expiresIn: expiresInSeconds }
   );
 }
@@ -2860,9 +2942,14 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { proyecto_id, filename, content_type } = await request.json();
+    const { proyecto_id, filename, content_type, size } = await request.json();
     if (!proyecto_id || !filename) {
       return NextResponse.json({ error: 'proyecto_id y filename requeridos' }, { status: 400 });
+    }
+    // Límite server-side: el tamaño declarado viaja firmado en la URL (el
+    // storage rechaza cuerpos distintos), así el 25MB no depende del cliente.
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0 || size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Tamaño de archivo inválido (máx. 25MB)' }, { status: 400 });
     }
 
     const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
@@ -2879,7 +2966,7 @@ export async function POST(request: Request) {
     const safe = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${proyecto_id}/${crypto.randomUUID()}-${safe}`;
 
-    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined);
+    const url = await getR2UploadUrl(path, typeof content_type === 'string' ? content_type : undefined, size);
     return NextResponse.json({ path, url });
   } catch (err) {
     console.error('POST /api/documentos/upload-url error:', err);
@@ -2911,7 +2998,7 @@ export const subirDocumento = async (
   const urlRes = await fetch('/api/documentos/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType }),
+    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType, size: file.size }),
   });
   if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
   const { path, url } = await urlRes.json();
@@ -3170,20 +3257,42 @@ export async function GET() {
 }
 ```
 
-- [ ] **Step 9: Configurar bucket R2 de prueba + CORS** (Cloudflare dashboard → R2 → bucket → Settings → CORS policy):
+- [ ] **Step 9: Storage S3-compatible para desarrollo — MinIO local** (no hay credenciales R2 reales todavía; MinIO valida el MISMO code path del SDK S3). Agregar a `docker-compose.dev.yml`:
 
-```json
-[
-  {
-    "AllowedOrigins": ["http://localhost:3000", "http://localhost:3006"],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedHeaders": ["content-type"],
-    "MaxAgeSeconds": 3600
-  }
-]
+```yaml
+  minio:
+    image: minio/minio
+    container_name: bbti-minio-dev
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
 ```
 
-Añadir a `.env` las 5 variables R2 con los valores del bucket de prueba.
+(y `miniodata: {}` en `volumes:`). Crear el bucket con un one-liner (SDK ya instalado):
+
+```bash
+docker compose -f docker-compose.dev.yml up -d minio
+node -e "const {S3Client,CreateBucketCommand}=require('@aws-sdk/client-s3');new S3Client({region:'auto',endpoint:'http://localhost:9000',credentials:{accessKeyId:'minioadmin',secretAccessKey:'minioadmin'},forcePathStyle:true}).send(new CreateBucketCommand({Bucket:'bbti-documentos-dev'})).then(()=>console.log('bucket OK'))"
+```
+
+Añadir a `.env` (dev):
+
+```env
+R2_ENDPOINT_URL=http://localhost:9000
+R2_BUCKET=bbti-documentos-dev
+R2_ACCESS_KEY_ID=minioadmin
+R2_SECRET_ACCESS_KEY=minioadmin
+R2_REGION=auto
+R2_FORCE_PATH_STYLE=true
+```
+
+MinIO permite presigned PUT/GET desde el navegador sin CORS extra (default `*`). ⚠️ En producción con R2 real: `R2_FORCE_PATH_STYLE` NO se define (default false) y el bucket necesita la política CORS (PUT/GET desde el dominio de la app) — queda en el checklist del ingeniero y en `.env.production.example`.
 
 - [ ] **Step 10: Verificar en el navegador** — subir un PDF en la pestaña Ingeniería de un proyecto → aparece en la lista; descargarlo (URL firmada abre/descarga con nombre legible); como Admin eliminarlo; pestaña Actividad de documentos registra los 3 eventos.
 
@@ -3406,7 +3515,7 @@ PORT=3000
 # App publicada por Docker Compose en http://<host>:3006
 
 # PostgreSQL — completar con los accesos reales de AWS RDS que envíe el ingeniero.
-# En desarrollo local: postgresql://postgres:postgres@host.docker.internal:5432/bbti?schema=gestion_proyectos
+# En desarrollo local: postgresql://postgres:postgres@host.docker.internal:5433/bbti?schema=gestion_proyectos
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=gestion_proyectos&sslmode=require
 
 # Sesiones JWT (mínimo 32 caracteres aleatorios; generar con: openssl rand -base64 48)

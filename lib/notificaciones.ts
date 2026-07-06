@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import type { Rol } from '@/types';
 import type { EtapaFlujo } from '@/lib/utils/estado-proyecto';
 
@@ -48,23 +48,21 @@ export interface NotificarInput {
 export const notificar = async (input: NotificarInput): Promise<void> => {
   try {
     if (input.rolesDestino.length === 0) return;
-    const admin = createAdminClient();
-    const { data: users } = await admin
-      .from('users')
-      .select('id')
-      .in('rol', input.rolesDestino)
-      .eq('activo', true);
-    const destinatarios = (users ?? []).filter((u) => u.id !== input.actorId);
+    const users = await prisma.users.findMany({
+      where: { rol: { in: input.rolesDestino }, activo: true },
+      select: { id: true },
+    });
+    const destinatarios = users.filter((u) => u.id !== input.actorId);
     if (destinatarios.length === 0) return;
-    await admin.from('notificaciones').insert(
-      destinatarios.map((u) => ({
+    await prisma.notificaciones.createMany({
+      data: destinatarios.map((u) => ({
         destinatario_id: u.id,
         proyecto_id: input.proyectoId,
         tipo: input.tipo,
         mensaje: input.mensaje,
         actor: input.actorNombre ?? null,
-      }))
-    );
+      })),
+    });
   } catch (err) {
     console.error('notificar error:', err);
   }

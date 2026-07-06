@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { DOCUMENTOS_BUCKET } from '@/lib/constants';
-import { logDocumentoEvento } from '@/lib/documento-eventos';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/session';
+import { deleteFromR2 } from '@/lib/r2/r2Storage';
+import { logDocumentoEvento } from '@/lib/documento-eventos';
 
 export async function DELETE(
   _request: Request,
@@ -10,29 +10,29 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { data: userData } = await supabase
-      .from('users').select('nombre, rol').eq('id', user.id).single();
+    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { nombre: true, rol: true } });
     if (userData?.rol !== 'Administrador') {
       return NextResponse.json({ error: 'Solo administradores pueden eliminar documentos' }, { status: 403 });
     }
 
-    const { data: doc } = await supabase
-      .from('proyecto_documentos').select('storage_path, nombre, proyecto_id').eq('id', id).maybeSingle();
+    const doc = await prisma.proyecto_documentos.findUnique({
+      where: { id },
+      select: { storage_path: true, nombre: true, proyecto_id: true },
+    });
     if (!doc) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 });
 
-    const admin = createAdminClient();
     if (doc.storage_path) {
-      const { error: storageErr } = await admin.storage.from(DOCUMENTOS_BUCKET).remove([doc.storage_path]);
-      if (storageErr) console.error('Storage remove falló:', storageErr.message);
+      try {
+        await deleteFromR2(doc.storage_path);
+      } catch (storageErr) {
+        console.error('R2 delete falló:', storageErr); // metadatos se borran igual (paridad con hoy)
+      }
     }
-    const { error } = await admin.from('proyecto_documentos').delete().eq('id', id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await prisma.proyecto_documentos.delete({ where: { id } });
 
-    // Registrar la eliminación (sobrevive al borrado del doc).
     await logDocumentoEvento({
       documentoId: id,
       proyectoId: doc.proyecto_id,

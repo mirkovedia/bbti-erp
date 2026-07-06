@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { Rol, Permissions, User } from '@/types';
 import { DOC_PREFIX } from '@/lib/constants';
 import { useAppStore } from '@/store/appStore';
@@ -94,27 +93,4 @@ export const checkUploadPermission = (
   }
   
   return lookup('canEditIngenieria');
-};
-
-// Carga los permisos dinámicos desde la BD en el lado del servidor
-export const getRolePermissionsServer = async (supabase: SupabaseClient): Promise<Record<Rol, Permissions>> => {
-  try {
-    const { data, error } = await supabase.from('role_permissions').select('rol, permissions');
-    if (error || !data || data.length === 0) {
-      return PERMS;
-    }
-    const map = {} as Record<Rol, Permissions>;
-    for (const r of data) {
-      map[r.rol as Rol] = r.permissions as Permissions;
-    }
-    // Asegurar que todos los roles conocidos estén en el mapa, rellenando con PERMS si faltan
-    for (const r of Object.keys(PERMS) as Rol[]) {
-      if (!map[r]) {
-        map[r] = PERMS[r];
-      }
-    }
-    return map;
-  } catch {
-    return PERMS;
-  }
 };
