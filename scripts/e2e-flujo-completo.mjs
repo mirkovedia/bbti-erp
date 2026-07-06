@@ -23,6 +23,15 @@ async function main() {
     projId = proy.id;
     check(crear.status === 201 && !!projId, `① Proyecto creado por API: ${projId} (estado ${proy.estado})`);
 
+    // Añadir el pago restante para completar el 100% y permitir la firma de la etapa "Completado"
+    await db.proyecto_pagos.create({
+      data: {
+        proyecto_id: projId,
+        monto: 150000,
+        descripcion: 'Pago restante'
+      }
+    });
+
     const page = await browser.newContext({ viewport: { width: 1366, height: 900 } }).then((c) => c.newPage());
     page.on('dialog', (d) => d.accept());
     const pageErrors = [];
