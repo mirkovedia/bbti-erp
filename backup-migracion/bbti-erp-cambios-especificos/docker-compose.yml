@@ -1,0 +1,11 @@
+services:
+  bbti-erp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bbti-erp
+    restart: unless-stopped
+    ports:
+      - "3006:3000"
+    env_file:
+      - .env.production

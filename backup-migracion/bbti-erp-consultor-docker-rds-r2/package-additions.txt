@@ -1,0 +1,17 @@
+Agregar dependencias si se integra R2 con AWS SDK:
+
+npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
+
+Si se migra DB desde Supabase a PostgreSQL directo, elegir una opción:
+
+Opción pg:
+npm install pg
+npm install -D @types/pg
+
+Opción Prisma:
+npm install prisma @prisma/client
+npx prisma init
+
+Opción Drizzle:
+npm install drizzle-orm postgres
+npm install -D drizzle-kit

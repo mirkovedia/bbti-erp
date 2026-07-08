@@ -1,0 +1,6 @@
+# Instalar para RDS PostgreSQL con pg
+npm install pg
+npm install -D @types/pg
+
+# Instalar para Cloudflare R2 compatible S3
+npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
