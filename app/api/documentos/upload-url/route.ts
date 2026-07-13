@@ -3,8 +3,14 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { getR2UploadUrl } from '@/lib/r2/r2Storage';
 import { checkUploadPermission } from '@/lib/auth/permissions';
-import { MAX_FILE_SIZE } from '@/lib/constants';
 import type { Rol } from '@/types';
+
+// Límite de subida parametrizado por entorno (pedido del ingeniero): MVP 25MB,
+// ajustable a 50/100MB sin redeploy de código si los planos reales lo exigen.
+const maxUploadMb = (): number => {
+  const n = Number(process.env.MAX_UPLOAD_MB);
+  return Number.isFinite(n) && n > 0 ? n : 25;
+};
 
 export async function POST(request: Request) {
   try {
@@ -16,9 +22,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'proyecto_id y filename requeridos' }, { status: 400 });
     }
     // Límite server-side: el tamaño declarado viaja firmado en la URL (el
-    // storage rechaza cuerpos distintos), así el 25MB no depende del cliente.
-    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0 || size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Tamaño de archivo inválido (máx. 25MB)' }, { status: 400 });
+    // storage rechaza cuerpos distintos), así el límite no depende del cliente.
+    const maxMb = maxUploadMb();
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0 || size > maxMb * 1024 * 1024) {
+      return NextResponse.json(
+        { error: `Tamaño de archivo inválido (máx. ${maxMb}MB)` },
+        { status: 400 }
+      );
     }
 
     const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });

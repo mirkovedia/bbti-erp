@@ -1,5 +1,5 @@
 // lib/constants.ts
-export const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB en bytes
+// (El límite de subida ya no vive aquí: lo define el servidor vía env MAX_UPLOAD_MB.)
 
 // Estados del flujo de planos (cada documento/versión tiene el suyo)
 export const ESTADOS_PLANO = [

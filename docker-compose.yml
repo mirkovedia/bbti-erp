@@ -5,12 +5,20 @@ services:
       dockerfile: Dockerfile
     container_name: bbti-erp
     restart: unless-stopped
+    # El puerto 3006 publicado es SOLO para desarrollo local / pruebas internas.
+    # En producción la app va detrás de Traefik (dominio proyectos.bbtecnologia.com):
+    # quitar este mapeo y adjuntar el servicio a la red de Traefik del servidor,
+    # apuntando el router al puerto interno 3006 del contenedor.
     ports:
-      - "3006:3000"
+      - "3006:3006"
     env_file:
       - .env.production
+    environment:
+      # Forzado aquí para que un .env.production con PORT viejo no rompa
+      # el puerto interno que espera Traefik/healthcheck
+      PORT: 3006
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3006/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

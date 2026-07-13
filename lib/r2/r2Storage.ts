@@ -47,7 +47,7 @@ export async function getR2SignedUrl(key: string, expiresInSeconds = 3600, filen
 /** URL firmada de SUBIDA (PUT) — reemplaza createSignedUploadUrl de Supabase.
  *  El navegador sube directo con fetch PUT; el archivo no pasa por el server.
  *  `contentLength` viaja FIRMADO: el storage rechaza cuerpos de otro tamaño,
- *  así el límite de 25MB se hace cumplir server-side (no solo en el cliente). */
+ *  así el límite (env MAX_UPLOAD_MB) se hace cumplir server-side, no solo en el cliente. */
 export async function getR2UploadUrl(
   key: string,
   contentType?: string,

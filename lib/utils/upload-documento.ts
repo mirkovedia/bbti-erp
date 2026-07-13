@@ -1,8 +1,8 @@
-import { MAX_FILE_SIZE } from '@/lib/constants';
-
 /**
  * Sube un archivo a R2 (PUT directo con URL firmada) y registra sus metadatos.
  * El `prefix` clasifica el documento por área/tipo (ver DOC_PREFIX en constants).
+ * El límite de tamaño lo valida el SERVIDOR (env MAX_UPLOAD_MB) y su mensaje
+ * de error se propaga tal cual al usuario.
  * Lanza Error con mensaje legible si algo falla.
  */
 export const subirDocumento = async (
@@ -10,17 +10,16 @@ export const subirDocumento = async (
   file: File,
   prefix = ''
 ): Promise<void> => {
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error('El archivo supera el límite de 25MB.');
-  }
-
   const contentType = file.type || 'application/octet-stream';
   const urlRes = await fetch('/api/documentos/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType, size: file.size }),
   });
-  if (!urlRes.ok) throw new Error('No se pudo iniciar la subida');
+  if (!urlRes.ok) {
+    const body = await urlRes.json().catch(() => null);
+    throw new Error(body?.error || 'No se pudo iniciar la subida');
+  }
   const { path, url } = await urlRes.json();
 
   // PUT directo al bucket (requiere CORS del bucket para este origen)

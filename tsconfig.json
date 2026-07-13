@@ -32,7 +32,6 @@
   ],
   "exclude": [
     "node_modules",
-    "bbti-erp-cambios-especificos",
-    "bbti-erp-consultor-docker-rds-r2"
+    "backup-migracion"
   ]
 }

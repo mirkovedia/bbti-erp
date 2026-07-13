@@ -28,7 +28,9 @@ RUN apk add --no-cache openssl curl \
  && addgroup -S nodejs && adduser -S nextjs -G nodejs
 
 ENV NODE_ENV=production
-ENV PORT=3000
+# Puerto interno 3006 (pedido del ingeniero: 3001-3005 ya ocupados en su servidor;
+# en producción Traefik enruta a este puerto por la red interna, sin publicarlo)
+ENV PORT=3006
 ENV HOSTNAME=0.0.0.0
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
@@ -46,5 +48,5 @@ COPY --chown=nextjs:nodejs docker/start.sh ./start.sh
 RUN chmod +x ./start.sh
 
 USER nextjs
-EXPOSE 3000
+EXPOSE 3006
 CMD ["./start.sh"]

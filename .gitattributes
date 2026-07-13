@@ -1,0 +1,3 @@
+# Los scripts de shell corren en contenedores Alpine: CRLF rompe el intérprete
+# ("bad interpreter"). Forzar LF sin importar el autocrlf de la máquina.
+*.sh text eol=lf
