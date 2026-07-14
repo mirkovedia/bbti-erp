@@ -41,6 +41,12 @@ export default function CalendarioPage() {
       }
     };
     fetchData();
+    // Tiempo real (polling): el calendario se refresca solo cada 10s
+    // (fechas de entrega y estados cambiados por otros usuarios, sin F5).
+    const timer = setInterval(() => {
+      if (!document.hidden) fetchData();
+    }, 10_000);
+    return () => clearInterval(timer);
   }, []);
 
   // Solo los que tienen fecha de entrega, ordenados por la más próxima primero

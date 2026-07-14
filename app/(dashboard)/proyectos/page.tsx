@@ -48,6 +48,12 @@ export default function ProyectosPage() {
 
   useEffect(() => {
     fetchProyectos();
+    // Tiempo real (polling): la lista se refresca sola cada 10s para reflejar
+    // proyectos creados/modificados por otros usuarios sin F5.
+    const timer = setInterval(() => {
+      if (!document.hidden) fetchProyectos();
+    }, 10_000);
+    return () => clearInterval(timer);
   }, []);
 
   const puedeEliminar = can(user, 'canDelete');

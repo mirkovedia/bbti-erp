@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ArrowLeft } from 'lucide-react';
 import { Proyecto } from '@/types';
+import { nextSyncToken, applyIfFresh } from '@/lib/utils/proyecto-sync';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EstadoStepper } from '@/components/proyectos/EstadoStepper';
 import { FlujoVerificacion } from '@/components/proyectos/FlujoVerificacion';
@@ -76,6 +77,26 @@ export default function ProyectoDetailPage() {
     };
 
     fetchProyecto();
+  }, [params.id]);
+
+  // Tiempo real (polling): refresca el proyecto cada 10s para ver los cambios
+  // de OTROS usuarios sin F5. El token descarta la respuesta del poll si llega
+  // después de una acción local más nueva (mismo anti last-writer-wins que
+  // usan las tabs); las tabs con edición local solo adoptan si no hay cambios
+  // sin guardar.
+  useEffect(() => {
+    if (!params.id) return;
+    const timer = setInterval(async () => {
+      if (document.hidden) return; // pestaña en segundo plano: no gastar red
+      const token = nextSyncToken();
+      try {
+        const res = await fetch(`/api/proyectos/${params.id}`);
+        if (res.ok) applyIfFresh(token, await res.json(), setProyecto);
+      } catch {
+        // fallo de red transitorio: el próximo tick reintenta
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
   }, [params.id]);
 
   if (loading) {

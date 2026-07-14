@@ -135,14 +135,32 @@ export const TabComercial = ({ proyecto, onUpdate }: Props) => {
 
   const totalParsed = parsed?.reduce((s, m) => s + m.cantidad * (m.precio_unitario || 0), 0) ?? 0;
 
-  // Re-sincroniza los campos si cambia el proyecto mostrado (ajuste en render)
-  const [prevProyectoId, setPrevProyectoId] = useState(proyecto.id);
-  if (proyecto.id !== prevProyectoId) {
-    setPrevProyectoId(proyecto.id);
+  // Re-sincroniza los campos si cambia el proyecto mostrado, o cuando el
+  // polling trae datos comerciales nuevos de OTRO usuario — solo si no hay
+  // edición local en curso (ajuste en render).
+  const comercialSnap = JSON.stringify([
+    comercial?.fecha_entrega || '',
+    comercial?.dias_plazo || 0,
+    comercial?.adelanto || 0,
+    comercial?.metrado || '',
+  ]);
+  const adoptarComercial = () => {
     setFechaEntrega(comercial?.fecha_entrega || '');
     setDiasPlazo(comercial?.dias_plazo || 0);
     setAdelanto(comercial?.adelanto || 0);
     setMetrado(comercial?.metrado || '');
+  };
+  const [prevProyectoId, setPrevProyectoId] = useState(proyecto.id);
+  const [lastComercialSnap, setLastComercialSnap] = useState(comercialSnap);
+  if (proyecto.id !== prevProyectoId) {
+    setPrevProyectoId(proyecto.id);
+    setLastComercialSnap(comercialSnap);
+    adoptarComercial();
+  } else if (comercialSnap !== lastComercialSnap) {
+    const sinEdicionLocal =
+      JSON.stringify([fechaEntrega, diasPlazo, adelanto, metrado]) === lastComercialSnap;
+    setLastComercialSnap(comercialSnap);
+    if (sinEdicionLocal) adoptarComercial();
   }
 
   // Subir comprobante del adelanto (reusa el helper de documentos)

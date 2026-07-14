@@ -37,11 +37,21 @@ export const TabLogistica = ({ proyecto, onUpdate }: Props) => {
   const [saving, setSaving] = useState(false);
   const [nuevo, setNuevo] = useState({ codigo: '', nombre: '', cantidad: 0, unidad: 'und', precio_unitario: 0 });
 
-  // Re-sincroniza la lista si cambia el proyecto mostrado (patrón de ajuste en render)
+  // Re-sincroniza la lista si cambia el proyecto mostrado, o cuando el polling
+  // del detalle trae materiales nuevos de OTRO usuario — en ese caso solo se
+  // adoptan si no hay una edición local en curso (patrón de ajuste en render).
+  const propMats = proyecto.logistica?.materiales || [];
+  const propMatsJson = JSON.stringify(propMats);
   const [prevProyectoId, setPrevProyectoId] = useState(proyecto.id);
+  const [lastPropJson, setLastPropJson] = useState(propMatsJson);
   if (proyecto.id !== prevProyectoId) {
     setPrevProyectoId(proyecto.id);
-    setMateriales(proyecto.logistica?.materiales || []);
+    setLastPropJson(propMatsJson);
+    setMateriales(propMats);
+  } else if (propMatsJson !== lastPropJson) {
+    const sinEdicionLocal = JSON.stringify(materiales) === lastPropJson;
+    setLastPropJson(propMatsJson);
+    if (sinEdicionLocal) setMateriales(propMats);
   }
 
   const dirty = useMemo(
