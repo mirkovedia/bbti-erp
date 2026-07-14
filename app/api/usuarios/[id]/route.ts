@@ -42,14 +42,22 @@ export async function PATCH(
       return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });
     }
 
-    const data = await prisma.users.update({
-      where: { id },
-      // updates se arma campo a campo validado arriba; el cast evita el choque
-      // Record<string, unknown> vs input tipado de Prisma.
-      data: updates as Prisma.usersUncheckedUpdateInput,
-      select: { id: true, nombre: true, email: true, area: true, rol: true, activo: true },
-    });
-    return NextResponse.json(data);
+    try {
+      const data = await prisma.users.update({
+        where: { id },
+        // updates se arma campo a campo validado arriba; el cast evita el choque
+        // Record<string, unknown> vs input tipado de Prisma.
+        data: updates as Prisma.usersUncheckedUpdateInput,
+        select: { id: true, nombre: true, email: true, area: true, rol: true, activo: true },
+      });
+      return NextResponse.json(data);
+    } catch (e: unknown) {
+      // P2025 = la fila no existe → 404 en vez de 500 genérico
+      if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2025') {
+        return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+      }
+      throw e;
+    }
   } catch (err) {
     console.error('PATCH /api/usuarios/[id] error:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

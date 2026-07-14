@@ -2,12 +2,17 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { createSessionToken, SESSION_COOKIE } from '@/lib/auth/session';
+import { isRateLimited, registerFailedAttempt, clearAttempts } from '@/lib/auth/rate-limit';
 
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días, igual que la expiración del JWT
 
 // Hash bcrypt válido de una cadena aleatoria: iguala el tiempo de respuesta
 // cuando el email no existe (sin esto, la latencia del 401 delata cuentas).
 const DUMMY_HASH = '$2b$10$xm.95VGqKZ8yzOGKgrcnmOdhNzUmXQYhVNXdAuBJY7MZJggZYfPVy';
+
+// IP del cliente detrás de Traefik (primer valor de X-Forwarded-For).
+const clientIp = (request: Request): string =>
+  request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'sin-ip';
 
 export async function POST(request: Request) {
   try {
@@ -18,13 +23,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
     }
 
+    // Freno a fuerza bruta: 5 intentos fallidos por IP+email cada 15 min
+    const rateKey = `${clientIp(request)}:${email}`;
+    if (isRateLimited(rateKey)) {
+      return NextResponse.json(
+        { error: 'Demasiados intentos fallidos. Intenta de nuevo en unos minutos.' },
+        { status: 429 }
+      );
+    }
+
     const user = await prisma.users.findUnique({ where: { email } });
     // Anti-enumeración: mensaje idéntico Y tiempo idéntico exista o no el usuario.
     const hashToCheck = user && user.activo !== false ? user.password_hash : DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hashToCheck);
     if (!user || user.activo === false || !passwordOk) {
+      registerFailedAttempt(rateKey);
       return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
     }
+    clearAttempts(rateKey);
 
     const token = await createSessionToken({ sub: user.id, rol: user.rol, nombre: user.nombre });
     const res = NextResponse.json({

@@ -116,7 +116,15 @@ export async function PATCH(
       if (!can('canDelete')) {
         return NextResponse.json({ error: 'Sin permiso para restaurar proyectos' }, { status: 403 });
       }
-      await prisma.proyectos.update({ where: { id }, data: { activo: true } });
+      try {
+        await prisma.proyectos.update({ where: { id }, data: { activo: true } });
+      } catch (e: unknown) {
+        // P2025 = el proyecto no existe → 404 en vez de 500 genérico
+        if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2025') {
+          return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
+        }
+        throw e;
+      }
       const full = await buildFullProyecto(id);
       if (full) {
         await registrarActividad({

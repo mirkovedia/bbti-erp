@@ -119,7 +119,7 @@ export interface FlujoInput {
 }
 
 /** Saldo por cobrar, redondeado a céntimos (evita ruido de coma flotante). */
-export const pagoPendiente = (input: FlujoInput): number => {
+const pagoPendiente = (input: FlujoInput): number => {
   const pagado = (input.adelanto ?? 0) + (input.pagos ?? []).reduce((s, p) => s + (p.monto ?? 0), 0);
   return Math.max(0, Math.round(((input.monto ?? 0) - pagado) * 100) / 100);
 };
