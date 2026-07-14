@@ -11,10 +11,14 @@ export const subirDocumento = async (
   prefix = ''
 ): Promise<void> => {
   const contentType = file.type || 'application/octet-stream';
+  // El nombre CON prefijo viaja también a upload-url: el permiso por rol se
+  // evalúa según el prefijo (comprobante/OC → Comercial, despiece → Ingeniería).
+  // Con el nombre crudo, las subidas de Comercial devolvían 403.
+  const nombreFinal = prefix + file.name;
   const urlRes = await fetch('/api/documentos/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proyecto_id: proyectoId, filename: file.name, content_type: contentType, size: file.size }),
+    body: JSON.stringify({ proyecto_id: proyectoId, filename: nombreFinal, content_type: contentType, size: file.size }),
   });
   if (!urlRes.ok) {
     const body = await urlRes.json().catch(() => null);
@@ -34,7 +38,7 @@ export const subirDocumento = async (
   const metaRes = await fetch('/api/documentos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proyecto_id: proyectoId, nombre: prefix + file.name, tipo, storage_path: path }),
+    body: JSON.stringify({ proyecto_id: proyectoId, nombre: nombreFinal, tipo, storage_path: path }),
   });
   if (!metaRes.ok) throw new Error('No se pudo registrar el documento');
 };
