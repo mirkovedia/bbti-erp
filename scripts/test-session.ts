@@ -12,7 +12,7 @@ const assert = (cond: boolean, msg: string) => {
 };
 
 async function main() {
-  const payload = { sub: 'user-123', rol: 'Administrador', nombre: 'Admin Sistema' };
+  const payload = { sub: 'user-123', rol: 'Administrador', nombre: 'Admin Sistema', sv: 3 };
 
   const token = await createSessionToken(payload);
   assert(typeof token === 'string' && token.split('.').length === 3, 'genera un JWT de 3 partes');
@@ -22,6 +22,16 @@ async function main() {
   assert(back?.sub === 'user-123', 'round-trip de sub');
   assert(back?.rol === 'Administrador', 'round-trip de rol');
   assert(back?.nombre === 'Admin Sistema', 'round-trip de nombre');
+  assert(back?.sv === 3, 'round-trip de sv (versión de sesión para revocación)');
+
+  // Token viejo sin sv (emitido antes de la revocación) → se trata como versión 1
+  const sinSv = await new SignJWT({ rol: 'Administrador', nombre: 'Admin Sistema' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('user-123')
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(new TextEncoder().encode(process.env.JWT_SECRET!));
+  assert((await verifySessionToken(sinSv))?.sv === 1, 'token legado sin sv → sv 1');
 
   const [h, p, s] = token.split('.');
   const tampered = await verifySessionToken(`${h}.${p}.${s.slice(0, -2)}xx`);

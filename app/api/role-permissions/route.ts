@@ -1,13 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
+import { z } from 'zod';
 import { PERMS } from '@/lib/auth/permissions';
+import { roles } from '@/lib/validations/usuario.schema';
+
+const permissionsSchema = z
+  .object({
+    canCreate: z.boolean(), canEdit: z.boolean(), canDelete: z.boolean(),
+    canManageUsers: z.boolean(), canConfig: z.boolean(), canViewReports: z.boolean(),
+    canViewFinance: z.boolean(), canEditFinance: z.boolean(), canEditProduccion: z.boolean(),
+    canEditLogistica: z.boolean(), canEditIngenieria: z.boolean(), canEditComercial: z.boolean(),
+    canExport: z.boolean(),
+  })
+  .strict();
+const rolePermSchema = z.object({ rol: z.enum(roles), permissions: permissionsSchema });
 import type { Rol, Permissions } from '@/types';
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const data = await prisma.role_permissions.findMany({ select: { rol: true, permissions: true } });
 
@@ -27,18 +40,21 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (!userData || userData.rol !== 'Administrador') {
+    if (user.rol !== 'Administrador') {
       return NextResponse.json({ error: 'Acceso denegado. Solo el Administrador puede editar roles.' }, { status: 403 });
     }
 
-    const { rol, permissions } = await request.json();
-    if (!rol || !permissions) {
-      return NextResponse.json({ error: 'rol y permissions requeridos' }, { status: 400 });
+    const parsed = rolePermSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'rol o permissions inválidos', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
+    const { rol, permissions } = parsed.data;
 
     await prisma.role_permissions.upsert({
       where: { rol },

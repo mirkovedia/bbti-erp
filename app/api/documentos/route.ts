@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { notificar } from '@/lib/notificaciones';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
 import { DOC_PREFIX } from '@/lib/constants';
@@ -10,8 +10,8 @@ import { checkUploadPermission } from '@/lib/auth/permissions';
 // GET: lista documentos (filtro opcional ?proyecto_id=)
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const proyectoId = new URL(request.url).searchParams.get('proyecto_id');
     const data = await prisma.proyecto_documentos.findMany({
@@ -41,8 +41,8 @@ export async function GET(request: Request) {
 // POST: registra los metadatos de un documento ya subido a R2
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { proyecto_id, nombre, tipo, storage_path } = await request.json();
     if (typeof proyecto_id !== 'string' || typeof nombre !== 'string' || typeof storage_path !== 'string'
@@ -56,11 +56,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'storage_path inválido para este proyecto' }, { status: 400 });
     }
 
-    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { nombre: true, rol: true } });
-    if (!userData) {
-      return NextResponse.json({ error: 'Usuario no registrado' }, { status: 403 });
-    }
-    if (!checkUploadPermission(userData.rol as Rol, nombre)) {
+    if (!checkUploadPermission(user.rol as Rol, nombre)) {
       return NextResponse.json({ error: 'No autorizado para registrar este tipo de archivo' }, { status: 403 });
     }
 
@@ -70,8 +66,8 @@ export async function POST(request: Request) {
         nombre,
         tipo: tipo ?? null,
         storage_path,
-        subido_por: userData.nombre ?? 'Sistema',
-        subido_por_rol: userData.rol ?? null,
+        subido_por: user.nombre ?? 'Sistema',
+        subido_por_rol: user.rol ?? null,
       },
     });
 
@@ -80,8 +76,8 @@ export async function POST(request: Request) {
       proyectoId: proyecto_id,
       documentoNombre: nombre,
       tipo: 'subida',
-      usuario: userData.nombre,
-      rol: userData.rol,
+      usuario: user.nombre,
+      rol: user.rol,
     });
 
     // Enrutamiento del aviso por prefijo del nombre (igual que hoy)
@@ -93,10 +89,10 @@ export async function POST(request: Request) {
     await notificar({
       proyectoId: proyecto_id,
       tipo: 'documento',
-      mensaje: `${userData.nombre ?? 'Alguien'} subió "${nombre}" a ${proyecto_id}.`,
+      mensaje: `${user.nombre ?? 'Alguien'} subió "${nombre}" a ${proyecto_id}.`,
       rolesDestino,
-      actorId: session.sub,
-      actorNombre: userData.nombre,
+      actorId: user.id,
+      actorNombre: user.nombre,
     });
 
     return NextResponse.json(data, { status: 201 });

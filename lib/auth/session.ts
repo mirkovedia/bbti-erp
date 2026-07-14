@@ -7,6 +7,9 @@ export interface SessionPayload {
   sub: string;    // id del usuario (uuid)
   rol: string;
   nombre: string;
+  /** Versión de sesión al emitir el token: cambiar la contraseña la incrementa
+   *  en BD e invalida los tokens antiguos (revocación). */
+  sv: number;
 }
 
 const getSecret = (): Uint8Array => {
@@ -18,7 +21,7 @@ const getSecret = (): Uint8Array => {
 };
 
 export const createSessionToken = async (p: SessionPayload): Promise<string> =>
-  new SignJWT({ rol: p.rol, nombre: p.nombre })
+  new SignJWT({ rol: p.rol, nombre: p.nombre, sv: p.sv })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(p.sub)
     .setIssuedAt()
@@ -30,7 +33,13 @@ export const verifySessionToken = async (token: string): Promise<SessionPayload 
     // Algoritmo fijado: evita confusión de algoritmos si esto migra a claves asimétricas
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] });
     if (!payload.sub) return null;
-    return { sub: payload.sub, rol: String(payload.rol ?? ''), nombre: String(payload.nombre ?? '') };
+    return {
+      sub: payload.sub,
+      rol: String(payload.rol ?? ''),
+      nombre: String(payload.nombre ?? ''),
+      // Tokens emitidos antes de la revocación no llevan sv: se tratan como v1
+      sv: typeof payload.sv === 'number' ? payload.sv : 1,
+    };
   } catch {
     return null;
   }

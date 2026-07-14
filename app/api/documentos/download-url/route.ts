@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { getR2SignedUrl } from '@/lib/r2/r2Storage';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { storage_path } = await request.json();
     if (!storage_path || typeof storage_path !== 'string') {
@@ -21,14 +21,13 @@ export async function POST(request: Request) {
 
     const url = await getR2SignedUrl(storage_path, 3600, doc.nombre);
 
-    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { nombre: true, rol: true } });
     await logDocumentoEvento({
       documentoId: doc.id,
       proyectoId: doc.proyecto_id,
       documentoNombre: doc.nombre,
       tipo: 'descarga',
-      usuario: userData?.nombre,
-      rol: userData?.rol,
+      usuario: user.nombre,
+      rol: user.rol,
     });
 
     return NextResponse.json({ url });

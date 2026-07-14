@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { usuarioSchema } from '@/lib/validations/usuario.schema';
 
 const SAFE_FIELDS = { id: true, nombre: true, email: true, area: true, rol: true, activo: true, created_at: true } as const;
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const data = await prisma.users.findMany({
       select: SAFE_FIELDS,
@@ -24,11 +24,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-
-    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (solicitante?.rol !== 'Administrador') {
+    const solicitante = await getSessionUser();
+    if (!solicitante) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    if (solicitante.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 

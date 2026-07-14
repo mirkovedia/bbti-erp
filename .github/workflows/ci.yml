@@ -1,0 +1,52 @@
+# CI: typecheck, lint, tests unitarios y auditoría de dependencias en cada push/PR.
+# Los E2E no corren aquí (necesitan Postgres+MinIO+navegador); se corren localmente.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy: el build/typecheck no se conecta a la BD, pero Prisma exige la variable
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=ci
+      JWT_SECRET: ci_secret_de_al_menos_32_caracteres!!
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests unitarios
+        run: |
+          npx tsx scripts/test-estado-proyecto.ts
+          npx tsx scripts/test-flujo-confirmaciones.ts
+          npx tsx scripts/test-vencimiento.ts
+          npx tsx scripts/test-notificaciones.ts
+          npx tsx scripts/test-session.ts
+
+      - name: Build de producción
+        run: npm run build
+
+      - name: Auditoría de dependencias (bloquea en críticas)
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Auditoría informativa (altas)
+        run: npm audit --omit=dev --audit-level=high || true

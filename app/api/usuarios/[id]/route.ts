@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
+import { logSecurity } from '@/lib/auth/security-log';
 import { roles } from '@/lib/validations/usuario.schema';
 
 export async function PATCH(
@@ -11,11 +12,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-
-    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (solicitante?.rol !== 'Administrador') {
+    const solicitante = await getSessionUser();
+    if (!solicitante) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    if (solicitante.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
@@ -30,12 +29,26 @@ export async function PATCH(
       }
       updates.rol = body.rol;
     }
-    // Cambio de contraseña opcional (antes lo hacía el Admin API de Supabase)
-    if (typeof body.password === 'string' && body.password.length > 0) {
-      if (body.password.length < 6) {
-        return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
+
+    // Guard anti "sistema sin admins": un Administrador no puede quitarse a sí
+    // mismo el rol ni desactivarse — otro admin debe hacerlo.
+    if (id === solicitante.id && (updates.activo === false || (updates.rol && updates.rol !== 'Administrador'))) {
+      return NextResponse.json(
+        { error: 'No puedes desactivarte ni quitarte el rol de Administrador a ti mismo' },
+        { status: 400 }
+      );
+    }
+
+    // Cambio de contraseña opcional. Mínimo 12 (política de seguridad) y
+    // además incrementa session_version: revoca TODAS las sesiones activas
+    // del usuario (una cookie robada muere al instante).
+    const cambiaPassword = typeof body.password === 'string' && body.password.length > 0;
+    if (cambiaPassword) {
+      if (body.password.length < 12) {
+        return NextResponse.json({ error: 'La contraseña debe tener al menos 12 caracteres' }, { status: 400 });
       }
       updates.password_hash = await bcrypt.hash(body.password, 10);
+      updates.session_version = { increment: 1 };
     }
 
     if (Object.keys(updates).length === 0) {
@@ -50,6 +63,12 @@ export async function PATCH(
         data: updates as Prisma.usersUncheckedUpdateInput,
         select: { id: true, nombre: true, email: true, area: true, rol: true, activo: true },
       });
+      if (cambiaPassword) {
+        await logSecurity({ tipo: 'password_cambiada', email: data.email, detalle: `por ${solicitante.nombre}` });
+      }
+      if (updates.activo === false) {
+        await logSecurity({ tipo: 'usuario_desactivado', email: data.email, detalle: `por ${solicitante.nombre}` });
+      }
       return NextResponse.json(data);
     } catch (e: unknown) {
       // P2025 = la fila no existe → 404 en vez de 500 genérico

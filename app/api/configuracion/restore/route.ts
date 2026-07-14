@@ -1,35 +1,71 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { z } from 'zod';
+import { getSessionUser } from '@/lib/auth/session-user';
+
+// Validación de FORMA del backup (restore es destructivo): version presente y
+// cada tabla, si viene, debe ser un array de objetos. El contenido fila a fila
+// lo valida Prisma contra el schema al insertar.
+const tablaSchema = z.array(z.record(z.string(), z.unknown())).optional();
+const backupSchema = z.object({
+  version: z.string().min(1),
+  data: z.object({
+    company_config: tablaSchema,
+    role_permissions: tablaSchema,
+    users: tablaSchema,
+    proyectos: tablaSchema,
+    proyecto_comercial: tablaSchema,
+    proyecto_ingenieria: tablaSchema,
+    proyecto_produccion: tablaSchema,
+    proyecto_finanzas: tablaSchema,
+    proyecto_materiales: tablaSchema,
+    proyecto_etapas: tablaSchema,
+    proyecto_pagos: tablaSchema,
+    proyecto_comentarios: tablaSchema,
+    proyecto_observaciones: tablaSchema,
+    proyecto_documentos: tablaSchema,
+    proyecto_confirmaciones: tablaSchema,
+    alertas: tablaSchema,
+  }),
+});
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (solicitante?.rol !== 'Administrador') {
+    if (user.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
-    const { version, data } = await request.json();
-    if (!version || !data) {
-      return NextResponse.json({ error: 'Formato de backup inválido o vacío' }, { status: 400 });
+    const parsed = backupSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Formato de backup inválido o vacío', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
+    const { data } = parsed.data;
 
+    // Zod valida la FORMA (arrays de objetos); el contenido fila a fila lo
+    // valida Prisma al insertar — de ahí los casts a los inputs de cada tabla.
     // 1. Configuración de empresa
     if (Array.isArray(data.company_config) && data.company_config.length > 0) {
       await prisma.company_config.deleteMany({});
-      await prisma.company_config.createMany({ data: data.company_config });
+      await prisma.company_config.createMany({
+        data: data.company_config as unknown as Prisma.company_configCreateManyInput[],
+      });
     }
 
     // 2. Permisos por rol
     if (Array.isArray(data.role_permissions) && data.role_permissions.length > 0) {
       for (const rp of data.role_permissions) {
+        const fila = rp as unknown as { rol: string; permissions: Prisma.InputJsonValue; updated_at?: string };
         await prisma.role_permissions.upsert({
-          where: { rol: rp.rol },
-          update: { permissions: rp.permissions, updated_at: rp.updated_at ?? new Date() },
-          create: rp,
+          where: { rol: fila.rol },
+          update: { permissions: fila.permissions, updated_at: fila.updated_at ?? new Date() },
+          create: fila,
         });
       }
     }
@@ -37,7 +73,8 @@ export async function POST(request: Request) {
     // 3. Usuarios (upsert por id para conservar referencias)
     if (Array.isArray(data.users) && data.users.length > 0) {
       for (const u of data.users) {
-        await prisma.users.upsert({ where: { id: u.id }, update: u, create: u });
+        const fila = u as unknown as Prisma.usersUncheckedCreateInput & { id: string };
+        await prisma.users.upsert({ where: { id: fila.id }, update: fila, create: fila });
       }
     }
 
@@ -46,7 +83,9 @@ export async function POST(request: Request) {
 
     // 5. Proyectos base
     if (Array.isArray(data.proyectos) && data.proyectos.length > 0) {
-      await prisma.proyectos.createMany({ data: data.proyectos });
+      await prisma.proyectos.createMany({
+        data: data.proyectos as unknown as Prisma.proyectosCreateManyInput[],
+      });
     }
 
     // 6. Subtablas en orden

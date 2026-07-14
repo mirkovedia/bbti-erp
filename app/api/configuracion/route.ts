@@ -1,12 +1,35 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
+
+// Whitelist tipada de la configuración editable. dias_alerta: entero 0-365
+// (z.coerce acepta el string del formulario), ''/null → null.
+const texto = z.string().max(300).optional();
+const configSchema = z
+  .object({
+    name: texto,
+    siglas: texto,
+    rubro: texto,
+    ruc: texto,
+    direccion: texto,
+    telefono: texto,
+    email: texto,
+    website: texto,
+    moneda: z.string().max(10).optional(),
+    igv: texto,
+    orden_prefix: z.string().max(10).optional(),
+    dias_alerta: z.preprocess(
+      (v) => (v === '' || v === null ? null : v),
+      z.coerce.number().int().min(0).max(365).nullable().optional()
+    ),
+  }); // sin .strict(): las claves desconocidas se DESCARTAN (paridad con el whitelist previo)
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const data = await prisma.company_config.findFirst();
     return NextResponse.json(data ?? {});
@@ -18,33 +41,23 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (solicitante?.rol !== 'Administrador') {
+    if (user.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const fields = ['name', 'siglas', 'rubro', 'ruc', 'direccion', 'telefono', 'email', 'website', 'moneda', 'igv', 'orden_prefix', 'dias_alerta'];
+    const parsed = configSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Datos de configuración inválidos', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
     const updates: Record<string, unknown> = { updated_at: new Date() };
-    for (const f of fields) {
-      if (body[f] === undefined) continue;
-      if (f === 'dias_alerta') {
-        // Int? en Prisma: castear y rechazar valores no numéricos con 400
-        if (body[f] === '' || body[f] === null) {
-          updates[f] = null;
-        } else {
-          const n = Number(body[f]);
-          if (!Number.isFinite(n)) {
-            return NextResponse.json({ error: 'dias_alerta debe ser un número' }, { status: 400 });
-          }
-          updates[f] = Math.trunc(n);
-        }
-      } else {
-        updates[f] = body[f];
-      }
+    for (const [k, v] of Object.entries(parsed.data)) {
+      if (v !== undefined) updates[k] = v;
     }
 
     const existing = await prisma.company_config.findFirst({ select: { id: true } });

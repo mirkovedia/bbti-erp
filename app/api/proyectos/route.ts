@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { getRolePermissionsServer } from '@/lib/auth/permissions-server';
 import { aplicarRetraso, computeEstadoFromConfirmaciones, type EtapaFlujo } from '@/lib/utils/estado-proyecto';
 import { notificar } from '@/lib/notificaciones';
@@ -10,8 +10,8 @@ import type { Rol } from '@/types';
 export async function GET(request: Request) {
   try {
     // Antes protegido por RLS; con Prisma el check de sesión es explícito.
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const verPapelera = new URL(request.url).searchParams.get('papelera') === '1';
 
@@ -41,8 +41,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = await request.json();
     if (typeof body.cliente !== 'string' || !body.cliente.trim()) {
@@ -69,13 +69,9 @@ export async function POST(request: Request) {
     const nextNum = String(maxCorrelativo + 1).padStart(2, '0');
     const id = `${prefix}-${nextNum}-${year}`;
 
-    const userData = await prisma.users.findUnique({
-      where: { id: session.sub },
-      select: { nombre: true, rol: true },
-    });
-    const rol = userData?.rol as Rol | undefined;
+    const rol = user.rol as Rol;
     const permsMap = await getRolePermissionsServer();
-    if (!rol || !permsMap[rol]?.canCreate) {
+    if (!permsMap[rol]?.canCreate) {
       return NextResponse.json({ error: 'No tienes permiso para crear proyectos' }, { status: 403 });
     }
 
@@ -99,8 +95,8 @@ export async function POST(request: Request) {
             cliente: body.cliente,
             fecha_creacion: new Date().toISOString().split('T')[0],
             monto: body.monto || 0,
-            usuario_id: session.sub,
-            usuario_nombre: userData?.nombre || 'Sistema',
+            usuario_id: user.id,
+            usuario_nombre: user.nombre || 'Sistema',
             estado: 'EN INGENIERÍA', // el estado es automático; un proyecto nuevo arranca en Ingeniería
           },
         });
@@ -143,7 +139,7 @@ export async function POST(request: Request) {
     await registrarActividad({
       proyectoId: id,
       cliente: body.cliente,
-      usuario: userData?.nombre || 'Sistema',
+      usuario: user.nombre || 'Sistema',
       rol: rol || 'Sistema',
       accion: 'creacion',
       detalle: `creó la orden de proyecto para el cliente ${body.cliente}`,
@@ -154,8 +150,8 @@ export async function POST(request: Request) {
       tipo: 'hito',
       mensaje: `Nuevo proyecto ${id} (${body.cliente}) creado. Inicien los planos.`,
       rolesDestino: ['Ingeniería'],
-      actorId: session.sub,
-      actorNombre: userData?.nombre,
+      actorId: user.id,
+      actorNombre: user.nombre,
     });
 
     return NextResponse.json(data, { status: 201 });

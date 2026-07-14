@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { getR2UploadUrl } from '@/lib/r2/r2Storage';
 import { checkUploadPermission } from '@/lib/auth/permissions';
 import type { Rol } from '@/types';
@@ -14,8 +14,8 @@ const maxUploadMb = (): number => {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { proyecto_id, filename, content_type, size } = await request.json();
     if (!proyecto_id || !filename) {
@@ -31,11 +31,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
-    if (!userData) {
-      return NextResponse.json({ error: 'Usuario no registrado' }, { status: 403 });
-    }
-    if (!checkUploadPermission(userData.rol as Rol, filename)) {
+    if (!checkUploadPermission(user.rol as Rol, filename)) {
       return NextResponse.json({ error: 'No autorizado para subir este tipo de archivo' }, { status: 403 });
     }
 

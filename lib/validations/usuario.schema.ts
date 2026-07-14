@@ -16,7 +16,9 @@ export const usuarioSchema = z.object({
   email: z.string().email('Email inválido'),
   area: z.string().min(2, 'El área es obligatoria'),
   rol: z.enum(roles, { message: 'Rol inválido' }),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  // Política de seguridad: mínimo 12 caracteres (las claves cortas son el
+  // primer eslabón del phishing/fuerza bruta).
+  password: z.string().min(12, 'La contraseña debe tener al menos 12 caracteres'),
 });
 
 export type UsuarioInput = z.infer<typeof usuarioSchema>;

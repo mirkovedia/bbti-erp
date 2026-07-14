@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { deleteFromR2 } from '@/lib/r2/r2Storage';
 import { logDocumentoEvento } from '@/lib/documento-eventos';
 
@@ -10,11 +10,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const userData = await prisma.users.findUnique({ where: { id: session.sub }, select: { nombre: true, rol: true } });
-    if (userData?.rol !== 'Administrador') {
+    if (user.rol !== 'Administrador') {
       return NextResponse.json({ error: 'Solo administradores pueden eliminar documentos' }, { status: 403 });
     }
 
@@ -38,8 +37,8 @@ export async function DELETE(
       proyectoId: doc.proyecto_id,
       documentoNombre: doc.nombre,
       tipo: 'eliminacion',
-      usuario: userData?.nombre,
-      rol: userData?.rol,
+      usuario: user.nombre,
+      rol: user.rol,
     });
 
     return NextResponse.json({ success: true });

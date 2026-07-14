@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { getRolePermissionsServer } from '@/lib/auth/permissions-server';
 import { registrarActividad } from '@/lib/utils/actividad';
 import {
@@ -75,8 +75,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const { id } = await params;
     const full = await buildFullProyecto(id);
@@ -94,20 +94,15 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = await request.json();
 
-    const userData = await prisma.users.findUnique({
-      where: { id: session.sub },
-      select: { nombre: true, rol: true },
-    });
-    const rol = userData?.rol as Rol | undefined;
+    const rol = user.rol as Rol;
     const permsMap = await getRolePermissionsServer();
-    const can = (perm: keyof Permissions): boolean =>
-      rol ? permsMap[rol]?.[perm] ?? false : false;
-    const autor = userData?.nombre || 'Sistema';
+    const can = (perm: keyof Permissions): boolean => permsMap[rol]?.[perm] ?? false;
+    const autor = user.nombre || 'Sistema';
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();
 
@@ -213,7 +208,7 @@ export async function PATCH(
         tipo: 'confirmacion',
         mensaje: mensajeConfirmacion(etapa, id),
         rolesDestino: rolesParaConfirmacion(etapa),
-        actorId: session.sub,
+        actorId: user.id,
         actorNombre: autor,
       });
     }
@@ -247,7 +242,7 @@ export async function PATCH(
         tipo: 'confirmacion',
         mensaje: `Se revirtió la etapa "${etapa}" de ${id}.`,
         rolesDestino: [rolDelAreaDeEtapa(etapa)],
-        actorId: session.sub,
+        actorId: user.id,
         actorNombre: autor,
       });
     }
@@ -352,7 +347,7 @@ export async function PATCH(
         tipo: 'datos',
         mensaje: `${autor} importó el metrado de ${id}. Revisen las compras.`,
         rolesDestino: ['Logística'],
-        actorId: session.sub,
+        actorId: user.id,
         actorNombre: autor,
       });
     }
@@ -385,7 +380,7 @@ export async function PATCH(
           tipo: 'documento',
           mensaje: `Ingeniería envió un plano de ${id} para revisión.`,
           rolesDestino: ['Comercial'],
-          actorId: session.sub,
+          actorId: user.id,
           actorNombre: autor,
         });
       }
@@ -494,16 +489,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const userData = await prisma.users.findUnique({
-      where: { id: session.sub },
-      select: { nombre: true, rol: true },
-    });
-    const rol = userData?.rol as Rol | undefined;
+    const rol = user.rol as Rol;
     const permsMap = await getRolePermissionsServer();
-    if (!rol || !permsMap[rol]?.canDelete) {
+    if (!permsMap[rol]?.canDelete) {
       return NextResponse.json({ error: 'Sin permiso para eliminar proyectos' }, { status: 403 });
     }
 
@@ -516,7 +507,7 @@ export async function DELETE(
     await registrarActividad({
       proyectoId: id,
       cliente: proy.cliente,
-      usuario: userData?.nombre || 'Sistema',
+      usuario: user.nombre || 'Sistema',
       rol: rol || 'Sistema',
       accion: 'eliminacion',
       detalle: `envió la orden de proyecto a la papelera`,
@@ -525,10 +516,10 @@ export async function DELETE(
     await notificar({
       proyectoId: id,
       tipo: 'hito',
-      mensaje: `${userData?.nombre ?? 'Alguien'} (${rol}) eliminó la PR ${id}${proy.cliente ? ` — ${proy.cliente}` : ''}.`,
+      mensaje: `${user.nombre ?? 'Alguien'} (${rol}) eliminó la PR ${id}${proy.cliente ? ` — ${proy.cliente}` : ''}.`,
       rolesDestino: ['Administrador', 'Gerencia General'],
-      actorId: session.sub,
-      actorNombre: userData?.nombre,
+      actorId: user.id,
+      actorNombre: user.nombre,
     });
 
     return NextResponse.json({ success: true });

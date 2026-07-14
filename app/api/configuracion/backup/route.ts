@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const solicitante = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true, email: true } });
-    if (solicitante?.rol !== 'Administrador') {
+    if (user.rol !== 'Administrador') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
@@ -36,7 +35,7 @@ export async function GET() {
     return NextResponse.json({
       version: '1.0',
       exportedAt: new Date().toISOString(),
-      exportedBy: solicitante.email,
+      exportedBy: user.email,
       data: { company_config, users, proyectos, role_permissions, proyecto_comercial, proyecto_ingenieria, proyecto_materiales, proyecto_produccion, proyecto_etapas, proyecto_finanzas, proyecto_pagos, proyecto_comentarios, proyecto_observaciones, proyecto_documentos, proyecto_confirmaciones, alertas },
     });
   } catch (err: unknown) {

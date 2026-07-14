@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth/session';
+import { getSessionUser } from '@/lib/auth/session-user';
 import { getRolePermissionsServer } from '@/lib/auth/permissions-server';
 import type { Rol } from '@/types';
 
@@ -30,14 +30,13 @@ interface FilaUsuario {
 export async function GET(req: NextRequest) {
   try {
     // Auth con la sesión del navegador.
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     // Verificar permiso canViewReports (respeta permisos dinámicos por rol).
-    const me = await prisma.users.findUnique({ where: { id: session.sub }, select: { rol: true } });
     const perms = await getRolePermissionsServer();
-    const rolActual = me?.rol as Rol | undefined;
-    if (!rolActual || !perms[rolActual]?.canViewReports) {
+    const rolActual = user.rol as Rol;
+    if (!perms[rolActual]?.canViewReports) {
       return NextResponse.json({ error: 'Acceso restringido' }, { status: 403 });
     }
 

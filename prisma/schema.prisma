@@ -26,16 +26,32 @@ model company_config {
 }
 
 model users {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nombre         String
-  email          String           @unique
-  area           String
-  rol            String
-  activo         Boolean          @default(true)
-  password_hash  String
-  created_at     DateTime         @default(now()) @db.Timestamptz(6)
-  notificaciones notificaciones[]
-  proyectos      proyectos[]
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre          String
+  email           String           @unique
+  area            String
+  rol             String
+  activo          Boolean          @default(true)
+  password_hash   String
+  // Revocación de sesiones: el JWT lleva la versión con la que se emitió;
+  // cambiar la contraseña incrementa la versión e invalida tokens antiguos.
+  session_version Int              @default(1)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  notificaciones  notificaciones[]
+  proyectos       proyectos[]
+}
+
+// Bitácora de eventos de seguridad (logins, bloqueos, cambios de clave).
+// Separada de actividad_log a propósito: esto no es feed de negocio.
+model security_log {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tipo       String // login_ok | login_fail | login_bloqueado | password_cambiada | usuario_desactivado
+  email      String?
+  ip         String?
+  detalle    String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)])
 }
 
 model proyectos {
