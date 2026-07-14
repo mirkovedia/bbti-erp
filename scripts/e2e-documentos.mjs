@@ -29,7 +29,7 @@ try {
   // Subir
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.click('button:has-text("Subir documento")'),
+    page.click('button:has-text("Subir plano / documento")'),
   ]);
   await chooser.setFiles(tmpFile);
   await page.waitForTimeout(4000);
