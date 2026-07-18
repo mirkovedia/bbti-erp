@@ -21,6 +21,7 @@ const api = (cookie, method, path, body, headers = {}) =>
 const EMAIL_TEST = 'sec.test@bbti.com.pe';
 const CLAVE_1 = 'ClaveSegura#2026a';
 const CLAVE_2 = 'OtraClaveLarga#2026b';
+const CLAVE_3 = 'TerceraClave#2026c';
 
 try {
   // ── 1. Cabeceras de seguridad en todas las respuestas ─────────────────────
@@ -63,9 +64,30 @@ try {
   const cookieNueva = await getAuthCookie(EMAIL_TEST, CLAVE_2);
   assert((await api(cookieNueva, 'GET', '/api/auth/me')).status === 200, '⑭ con la clave nueva se emite sesión válida');
 
+  // ── 4b. Cambio de contraseña por el PROPIO usuario ───────────────────────
+  assert((await api(cookieNueva, 'POST', '/api/auth/cambiar-password',
+    { actual: 'incorrecta-123', nueva: CLAVE_3 })).status === 400,
+    '⑭b cambio propio con actual incorrecta → 400');
+  assert((await api(cookieNueva, 'POST', '/api/auth/cambiar-password',
+    { actual: CLAVE_2, nueva: 'corta' })).status === 400,
+    '⑭c cambio propio con nueva corta → 400');
+
+  const cookieOtra = await getAuthCookie(EMAIL_TEST, CLAVE_2); // segunda sesión abierta
+  const resCambio = await api(cookieNueva, 'POST', '/api/auth/cambiar-password',
+    { actual: CLAVE_2, nueva: CLAVE_3 });
+  assert(resCambio.status === 200, '⑭d cambio propio correcto → 200');
+  const cookieRenovada = (resCambio.headers.get('set-cookie') || '').match(/bbti_session=[^;]+/)?.[0];
+  assert(!!cookieRenovada, '⑭e el cambio devuelve una cookie renovada');
+  assert((await api(cookieOtra, 'GET', '/api/auth/me')).status === 401,
+    '⑭f la OTRA sesión abierta queda revocada (una cookie robada muere)');
+  assert((await api(cookieRenovada, 'GET', '/api/auth/me')).status === 200,
+    '⑭g la sesión que hizo el cambio SIGUE viva (cookie renovada)');
+  const cookie3 = await getAuthCookie(EMAIL_TEST, CLAVE_3);
+  assert((await api(cookie3, 'GET', '/api/auth/me')).status === 200, '⑭h login con la clave nueva → 200');
+
   // ── 5. Revocación por DESACTIVACIÓN ──────────────────────────────────────
   assert((await api(admin, 'PATCH', `/api/usuarios/${testId}`, { activo: false })).status === 200, '⑮ admin desactiva al usuario');
-  assert((await api(cookieNueva, 'GET', '/api/notificaciones')).status === 401,
+  assert((await api(cookie3, 'GET', '/api/notificaciones')).status === 401,
     '⑯ usuario desactivado pierde acceso al instante (no espera a que expire la cookie)');
 
   // ── 6. Guard anti "sistema sin admins" ───────────────────────────────────

@@ -12,8 +12,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: bbti
     ports:
-      # 5433 en el host: la máquina de dev tiene un PostgreSQL 18 nativo ocupando 5432
-      - "5433:5432"
+      # 5434 en el host: 5432 lo ocupa un PostgreSQL nativo y 5433 la BD de otro proyecto (ventas_jg)
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql

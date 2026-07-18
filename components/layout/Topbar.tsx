@@ -1,9 +1,11 @@
 'use client';
 
-import { LogOut, Menu } from 'lucide-react';
+import { useState } from 'react';
+import { KeyRound, LogOut, Menu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/appStore';
 import { NotificacionesBell } from '@/components/layout/NotificacionesBell';
+import { CambiarPasswordModal } from '@/components/layout/CambiarPasswordModal';
 import { cn } from '@/lib/utils';
 
 const rolColors: Record<string, string> = {
@@ -20,6 +22,7 @@ const rolColors: Record<string, string> = {
 export const Topbar = () => {
   const router = useRouter();
   const { user, setUser, sidebarCollapsed, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -79,6 +82,14 @@ export const Topbar = () => {
             </div>
 
             <button
+              onClick={() => setShowPassword(true)}
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+              title="Cambiar mi contraseña"
+            >
+              <KeyRound className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+
+            <button
               onClick={handleLogout}
               className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
               title="Cerrar sesión"
@@ -88,6 +99,8 @@ export const Topbar = () => {
           </div>
         )}
       </div>
+
+      <CambiarPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
     </header>
   );
 };

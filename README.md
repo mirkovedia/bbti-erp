@@ -61,7 +61,7 @@ docker compose -f docker-compose.dev.yml up -d
 
 # 2. Configurar base de datos y esquema
 cp .env.production.example .env
-# (Asegurar que DATABASE_URL apunta al puerto 5433 local)
+# (Asegurar que DATABASE_URL apunta al puerto 5434 local)
 npx prisma migrate dev && npm run seed
 
 # 3. Arrancar servidor de desarrollo
