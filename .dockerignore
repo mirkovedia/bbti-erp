@@ -9,10 +9,7 @@ Dockerfile
 docker-compose.yml
 docker-compose.dev.yml
 docs
-supabase
 scripts
 *.md
 .playwright
 e2e-results
-bbti-erp-cambios-especificos
-bbti-erp-consultor-docker-rds-r2

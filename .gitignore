@@ -54,6 +54,11 @@ next-env.d.ts
 *.pptx
 docs/guion-*
 
-# paquetes del consultor externo (contienen host RDS real y keys parciales — NO subir)
-/bbti-erp-cambios-especificos/
-/bbti-erp-consultor-docker-rds-r2/
+# paquetes del consultor externo (contienen host RDS real y keys parciales — NO subir,
+# bajo NINGÚN nombre de carpeta: en julio se re-subieron dentro de backup-migracion/)
+bbti-erp-cambios-especificos/
+bbti-erp-consultor-docker-rds-r2/
+backup-migracion/
+
+# artefactos temporales de los E2E (capturas, archivos de prueba)
+scripts/_*
