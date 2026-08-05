@@ -62,3 +62,6 @@ backup-migracion/
 
 # artefactos temporales de los E2E (capturas, archivos de prueba)
 scripts/_*
+
+# presentación generada (regenerable con scripts/generar-presentacion.py)
+BBTI-ERP-Estado.pptx
